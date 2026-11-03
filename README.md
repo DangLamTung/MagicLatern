@@ -48,9 +48,11 @@ Top: standard Canon Neutral JPEG capture. Bottom: the same frame with
 
 ## Same frame, four stocks
 
-![Same frame with Portra 400, Velvia 50, CineStill 800T and Bleach Bypass](docs/img/stocks-4up.jpg)
+![One frame through many stocks](docs/img/stock-stack.jpg)
 
 ## How the look gets into the file
+
+![The hook path, from the patched firmware function to the file, and the measured timeline](docs/img/hook-path.png)
 
 ```
 shutter → Canon hardware converts raw to full-res YUV (5472×3648) in DRAM at 0x4c394000
