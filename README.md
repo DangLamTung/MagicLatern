@@ -344,7 +344,8 @@ The camera cannot hold a `.cube` — `classic_neg_sRGB.cube` is 786 KB of text a
 So the cube is resampled on the Mac and packed:
 
 ```sh
-python3 tools/cube2bin.py my.cube LOOK.BIN --size 17   # 29 KB
+python3 magiclantern/modules/film_sim/tools/cube2bin.py \
+    my.cube LOOK.BIN --size 17   # 29 KB
 cp LOOK.BIN /Volumes/EOS_DIGITAL/ML/FILMSIM/LOOK.BIN
 ```
 
