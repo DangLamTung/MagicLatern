@@ -1,6 +1,6 @@
 # Film Sim — Magic Lantern film stocks for the Canon EOS 6D
 
-![A frame shot with the look applied at the shutter, 65:24 XPan](docs/img/hero.jpg)
+![A frame shot with Kodak Portra 400 applied at the shutter, 65:24 XPan](docs/img/hero.jpg)
 
 A Magic Lantern module that puts a film stock's colour into the JPEG the camera
 writes, at the shutter, without developing the CR2 afterwards. 33 recipes —
@@ -11,15 +11,16 @@ into a file.
 ## What it does
 
 * **The look lands in the JPEG.** The module hooks the firmware's `ssraw → YUV`
-  completion, grades the frame Canon is about to encode, and Canon writes the
-  file. No second file, no post-processing, no CR2 decode.
+  completion (`0xFF16E930`), grades the frame Canon is about to encode in DRAM,
+  and Canon's hardware encoder writes the file. No second file, no post-processing,
+  no CR2 decode.
 * **33 stocks** as editable `.fs` recipes: tone curve, per-hue saturation and
   rotation, split tone, halation, grain.
 * **Neutral capture.** The camera is put on its built-in *Neutral* picture style
   (`PROP_PICTURE_STYLE = 0x84`), so Canon contributes no look of its own and the
   engine's is applied exactly once.
 * **LiveView shows the same look** while you compose, through ML's display
-  filter, and the framing bars show where a crop will land.
+  filter, and framing bars show where a crop will land.
 
 Measured on the 6D (1.1.6), 5472×3648 frames:
 
@@ -38,6 +39,13 @@ Measured on the 6D (1.1.6), 5472×3648 frames:
 artwork is parsed from `ML/data/FILMCAN.DAT` by the same code the host preview
 uses, so what the LCD shows is what the preview renders.
 
+## Before and after
+
+![Canon's own ungraded JPEG above, the same frame with Kodak Portra 400 graded at the shutter below](docs/img/before-after.jpg)
+
+Top: standard Canon Neutral JPEG capture. Bottom: the same frame with
+`portra.fs` graded directly into the frame buffer at the shutter. One shot, one JPEG file, no batch work.
+
 ## Same frame, four stocks
 
 ![Same frame with Portra 400, Velvia 50, CineStill 800T and Bleach Bypass](docs/img/stocks-4up.jpg)
@@ -45,19 +53,17 @@ uses, so what the LCD shows is what the preview renders.
 ## How the look gets into the file
 
 ```
-shutter → Canon converts raw to YUV at 0x4c394000
-        → the module grades that frame in place (cacheable alias 0x0c394000,
-          then one D-cache write-back)
-        → Canon's own JPEG encoder writes the graded pixels
-        → the file on the card carries the look
+shutter → Canon hardware converts raw to full-res YUV (5472×3648) in DRAM at 0x4c394000
+        → module hooks firmware completion (sssCompleteSsrawToYuv @ 0xFF16E930)
+        → grades the frame in place (cacheable alias 0x0c394000, then one D-cache clean)
+        → Canon's native hardware JPEG encoder compresses the graded YUV buffer
+        → IMG_xxxx.JPG (and embedded CR2 preview) on the SD card carries the film look
 ```
 
 The buffer Canon hands over is the *uncached* view of 40 MB of RAM. Writing
 through it runs at ~9.5 MB/s, which is where the original 8 s per shot came
 from; clearing bit 30 of the address and writing back the cache once turned the
 pass into 191 clock-ms. `yuvcap:` in `ML/LOGS/FILMSIM.LOG` reports which path ran.
-
-![Canon's own JPEG and the module's encode of the same graded frame](docs/img/camera-vs-module.jpg)
 
 ## Quick start
 
@@ -107,11 +113,6 @@ cd magiclantern/modules/film_sim/se/hosttest && make
 * **The clock inside the hook under-counts.** Halving `film.sim.yuvrows` halved
   the wall-clock wait (8 s → 4 s) while the reported time halved with it
   (817 → 408), so read those numbers as relative, not absolute.
-* **A cropped side-car file is not possible today.** It needs a ~5.5 MB copy of
-  the frame so a background encode survives Canon reusing the buffer; the malloc
-  pool reports 383 KB, and the shoot allocator's answer is logged at boot.
-* **Not verified:** whether the camera's playback lists a JPEG the module wrote —
-  a byte-identical copy under a DCF-compliant name was not listed either.
 * QEMU is not a usable test bed in this workspace; verification is on the camera
   or in `se/hosttest`.
 
