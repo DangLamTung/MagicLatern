@@ -1,0 +1,14 @@
+# Large or generated trees. magiclantern/ and tools/soup-engine/ are their own
+# git repositories; toolchain/ is the ARM compiler; qemu/ holds multi-GB disk
+# images; film_eval/ is rendered evidence (regenerate with tools/gui_preview).
+magiclantern/
+tools/
+toolchain/
+qemu/
+eos6d-v116-win/
+film_eval/
+
+# Scratch
+.DS_Store
+*.swp
+/tmp/
