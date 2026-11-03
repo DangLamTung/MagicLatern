@@ -52,20 +52,36 @@ Top: standard Canon Neutral JPEG capture. Bottom: the same frame with
 
 ## How the look gets into the file
 
-![The hook path, from the patched firmware function to the file, and the measured timeline](docs/img/hook-path.png)
+```mermaid
+flowchart TD
+    A["shutter pressed<br/>Canon exposes, reads the sensor, converts raw to YUV"] --> B["0xFF16E930 sssCompleteSsrawToYuv<br/>hook patched here"]
+    B -->|"r1 = 0x4c394000, 5472x3648 UYVY, stride 10944"| C["grade in place through the cached alias<br/>bit 30 cleared: 0x4c394000 becomes 0x0c394000<br/>~2 s of wall time"]
+    C -->|"clean D-cache, mcr c7,c11,1 per 32-byte line, then DSB"| D["Canon's DMA reads 0x4c394000<br/>and sees the graded pixels"]
+    D --> E["Canon hardware JPEG encoder<br/>no software encode, no second file"]
+    E --> F["IMG_xxxx.JPG 5472x3648 with the look<br/>a B&W recipe gives saturation 0.0"]
+    B -.->|"0xFF3442DC, same r0, diag 5"| G["second hook site skipped<br/>one grade per shot"]
+```
 
+```mermaid
+timeline
+    title One shot, measured with four clocks, 5.8 s total
+    section press to file
+        0 ms : half press
+        3180 ms : hook runs, grade starts and takes about 2 s
+        3591 ms : look written, QuickReview shows the frame
+        4393 ms : JPG and CR2 done on the card
+        5755 ms : review ends, camera idle
 ```
-shutter → Canon hardware converts raw to full-res YUV (5472×3648) in DRAM at 0x4c394000
-        → module hooks firmware completion (sssCompleteSsrawToYuv @ 0xFF16E930)
-        → grades the frame in place (cacheable alias 0x0c394000, then one D-cache clean)
-        → Canon's native hardware JPEG encoder compresses the graded YUV buffer
-        → IMG_xxxx.JPG (and embedded CR2 preview) on the SD card carries the film look
-```
+
+The same picture as an image, for viewers without Mermaid:
+[hook path](docs/img/hook-path.png).
 
 The buffer Canon hands over is the *uncached* view of 40 MB of RAM. Writing
 through it runs at ~9.5 MB/s, which is where the original 8 s per shot came
-from; clearing bit 30 of the address and writing back the cache once turned the
-pass into 191 clock-ms. `yuvcap:` in `ML/LOGS/FILMSIM.LOG` reports which path ran.
+from. Clearing bit 30 and writing the cache back once cut that to ~2 s — the
+hook's own clock reports the same improvement as 817 → 191, but that clock
+counts ~10× less than wall time, so only the ratio is trustworthy. `yuvcap:` in
+`ML/LOGS/FILMSIM.LOG` says which path ran.
 
 ## Quick start
 
