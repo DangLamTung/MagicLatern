@@ -336,3 +336,29 @@ The Homebrew `arm-none-eabi-gcc` formula ships no newlib headers and fails with
 `build.sh` handles the macOS quirks: `ARM_BINPATH`, `READELF`
 (`arm-none-eabi-readelf`), GNU-vs-BSD `stat`, and `rst2html` from the toolchain
 venv.
+
+## External 3D LUTs in Develop
+
+The camera cannot hold a `.cube` — `classic_neg_sRGB.cube` is 786 KB of text at
+32³ and the develop's buffers already use most of what Magic Lantern can spare.
+So the cube is resampled on the Mac and packed:
+
+```sh
+python3 tools/cube2bin.py my.cube LOOK.BIN --size 17   # 29 KB
+cp LOOK.BIN /Volumes/EOS_DIGITAL/ML/FILMSIM/LOOK.BIN
+```
+
+Then set **Develop ▸ External LUT** to 1. The cube is applied to the decoded
+rows just before the film look, which is the sRGB input Lightroom and Resolve
+export for. Set **Strength** to 0 if the cube is meant to be the look rather
+than sit under it.
+
+| size | file | mean error vs the 32³ original | max |
+|---|---|---|---|
+| 17³ | 29 KB | 1.17 / 255 | 30 |
+| 25³ | 94 KB | 0.55 / 255 | 19 |
+| 33³ | 216 KB | 0.39 / 255 | 17 |
+
+Two converted cubes are in `luts_bin/`. The error is concentrated where the cube
+is steep — that is the source data, not the converter: sampled at its own 17 grid
+nodes the packed file matches the original to 0.002/255.
