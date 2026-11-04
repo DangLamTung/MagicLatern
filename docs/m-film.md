@@ -326,7 +326,52 @@ that claim was about a full-screen repaint, which stage 2 removes.
 
 </details>
 
-### Stage 2 — redraw only the strip, and stop double-buffering it. **Next.**
+### Stage 2 — redraw only the strip. **Done.** (module md5 `80e2c6f6`, installed)
+
+`fs_paint_band(y0, y1, fn)` does the same double-buffering as `fs_paint()` but
+copies only the rows the band covers, and the shelf now tracks three kinds of
+dirt: whole screen, the strip band (rows 352..445) and the header band (0..45).
+The spring sets the strip, the sheen sets the header, and anything that changes
+what the panel says still sets the whole screen.
+
+| per animation frame | before | after |
+|---|---|---|
+| rows copied between the two buffers | 480 × 2 | 94 × 2 |
+| bytes copied | 691,200 | 135,360 (−80 %) |
+| rows drawn | 480 (a full-screen `vgrad` plus everything) | 94 |
+
+Two things had to be checked, because none of this can be tried on the camera
+here:
+
+1. **Is a band self-contained?** `tools/gui_preview` now draws the whole shelf,
+   wipes the framebuffer to a sentinel, draws one band, and compares the pixels
+   *and* the text runs:
+
+   ```
+   band strip   rows 352..445: 0 px differ, 0 text items differ (4 items, 4 in band)
+   band header  rows   0.. 45: 0 px differ, 0 text items differ (3 items, 3 in band)
+   BAND CHECK PASS
+   ```
+
+2. **Does anything in the strip still animate on its own?** Yes, and it had to
+   go: the perforations were placed with `tick / 3 + …`, i.e. one pixel every
+   3 ms — a full 24 px period in 72 ms. With the strip redrawn only while it
+   moves, that term would not scroll, it would jump on every repaint. They are
+   now derived from `scroll` alone, so they travel exactly one `FRAME_PITCH`
+   per frame of strip travel. Verified from the rendered frames: at scroll 0,
+   256, 512, 768 the holes sit at 0, 12, 0, 12 px — 108 px per frame mod the
+   24 px period.
+
+The palette refresh inside `fs_picture_palette()` was "every 8th call", which
+tied it to the redraw rate; band repaints would have tripled the ENGIO traffic
+for nothing. It is a fixed 250 ms now.
+
+**Not verified:** the camera. The line to read is
+`shelf: paint N frames, M ms, R rows` in `ML/LOGS/FILMSIM.LOG`; before this
+change every second of animation cost 480 rows per frame in the count.
+
+
+
 
 `fs_paint()` in film_sim.c calls `bmp_idle_copy(0,0)` … render …
 `bmp_idle_copy(1,0)`, and each of those copies **720 × 480 bytes** (`bmp.c:181`).
@@ -355,7 +400,7 @@ because the band is still double-buffered — only smaller.
 **Verify:** a `shelf: paint` line in FILMSIM.LOG with draw ms, copy ms and the
 rows copied, once per second. Before/after the change, same session, same move.
 
-### Stage 3 — the shading. This is where their look actually comes from.
+### Stage 3 — the shading. **Next.** This is where their look actually comes from.
 
 Perspective scale, per-item light, a floor shadow and a reflection are what
 make their shelf read as objects in a space. None of it needs a 3D engine — it
