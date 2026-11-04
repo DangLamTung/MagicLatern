@@ -275,19 +275,25 @@ Our strip is already a **continuous field** — `dx = ((i*256 - scroll) * 108) /
 architecture; we are missing the easing, the clock, the redraw scope and the
 shading.
 
-### Stage 1 — the spring. **Done.** (module md5 `7477743`, installed)
+### Stage 1 — the spring. **Done.** (module md5 `a7dc9b6b`, installed)
 
 `gui/fs_spring.h` holds the integrator; `fs_shelf_animate(dt)` calls it and
 the shelf loop's clock is 30 ms. `se/hosttest/springtest` runs the same header
 and prints, per move, the number of frames and the largest single step:
 
 ```
-   1 shelves, 30 ms frames: spring  16 frames ( 480 ms)  biggest step  17.2%
+   1 shelves, 30 ms frames: spring  17 frames ( 510 ms)  biggest step  17.3%
    1 shelves, 70 ms frames: was     15 frames (1050 ms)  biggest step  33.2%
-   3 shelves, 30 ms frames: spring  21 frames ( 630 ms)  biggest step  17.2%
+   3 shelves, 30 ms frames: spring  23 frames ( 690 ms)  biggest step  17.3%
    3 shelves, 70 ms frames: was     18 frames (1260 ms)  biggest step  33.3%
-  10 shelves, 30 ms frames: spring  25 frames ( 750 ms)  biggest step  17.2%
+  10 shelves, 30 ms frames: spring  26 frames ( 780 ms)  biggest step  17.3%
 ```
+
+The first version of this integrator ran `for (left = dt; left > 0; left -= 8)`,
+which at 30 ms did four 8 ms sub-steps — 32 ms of physics for 30 ms of wall
+time, 6.7 % fast, and a whole sub-step invented for any frame shorter than
+8 ms. The remainder is carried now, and the numbers above are the corrected
+ones; they match the float reference exactly (510 / 690 / 780 ms).
 
 Frames drawn per glide barely moved (15 → 16 for one shelf), so the CPU per
 move is the same and only the wall time halves — which is the whole point.
