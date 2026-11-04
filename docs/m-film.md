@@ -251,3 +251,151 @@ python3 magiclantern/modules/film_sim/tools/mfilm_import.py --all-missing \
 
 ./build.sh && ./install-sd.sh      # module, then verify labels + md5 on the card
 ```
+
+---
+
+## 9. Plan: the smoothness, in four stages
+
+Their animation reads smooth for four separate reasons, and only the first
+two are about motion. Numbered by what we would do first.
+
+### Where the gap actually is
+
+| axis | ours (`fs_shelf_animate`, 70 ms) | theirs (`spring_step`, 28 ms) |
+|---|---|---|
+| easing | `step = d/3` — exponential, no velocity | damped spring, 2.1 Hz, ζ 0.86, integrated in 8 ms sub-steps and *settled* |
+| 1 shelf settles | 1050 ms, 15 frames | 560 ms, 20 frames |
+| biggest frame jump | 33 % of a shelf; **100 %** at three stocks away | 15 % |
+| frame clock | 70 ms gate, loop already sleeps 30 ms | 28 ms |
+| redraw | whole screen, twice copied | dirty rows only, only those rows presented |
+| degradation | none | `fos_can_quality` falls at >50 ms, rises at <26 ms |
+
+Our strip is already a **continuous field** — `dx = ((i*256 - scroll) * 108) / 256`
+— which is the same idea as their `pose_of(i - pos.x)`. We are not missing the
+architecture; we are missing the easing, the clock, the redraw scope and the
+shading.
+
+### Stage 1 — the spring. Smallest change, fixes the visible fault.
+
+Replace the body of `fs_shelf_animate()` (film_sim.c, ~line 3310) with their
+integrator, keeping `fs_anim_scroll` in the same 1/256 frame units and adding
+a velocity:
+
+```c
+static int fs_anim_vel;                 /* 1/256 frame units per second */
+/* w = 2*pi*2.1 Hz, zeta 0.86, sub-stepped at 8 ms, settle when |d| < 1/256
+ * and |v| < 5/256 per second */
+```
+
+Cost: ~20 lines, no renderer change, no new memory. Risk: none below the
+settle threshold — it snaps exactly as today.
+
+Also drop the gate from 70 ms to 30 ms. The loop already wakes every 30 ms —
+`msleep(30)` at the end — so the gate is what halves the rate. Removing it
+does not by itself give 33 fps: the period becomes draw time plus 30 ms, which
+is why stage 2 comes next. The header sheen stays on its 260 ms timer.
+
+**Verify:** a host bench that steps the function with a fixed dt and prints the
+per-frame jump profile — the same method that produced the table above. It must
+show no step larger than ~15 % of a shelf for a 3-shelf move, and a settle
+inside ~600 ms.
+
+**Not verified until on the camera:** that 30 ms redraws do not make the develop
+task starve. The existing note in the loop says the opposite was true at 14 Hz;
+that claim was about a full-screen repaint, which stage 2 removes.
+
+### Stage 2 — redraw only the strip, and stop double-buffering it.
+
+`fs_paint()` in film_sim.c calls `bmp_idle_copy(0,0)` … render …
+`bmp_idle_copy(1,0)`, and each of those copies **720 × 480 bytes** (`bmp.c:181`).
+That is 691,200 bytes of copying per animation frame for a strip that occupies
+94 of 480 rows — 19.6 % of the screen.
+
+Do what they do: keep a cached background and repaint only the band.
+
+1. Draw the static chrome (header, labels, footer) **once** into an `fsg_bg`
+   buffer when the shelf opens and whenever the stock changes.
+2. Each animation frame: restore the strip band from `fsg_bg`
+   (`memcpy` of `FSG_W × STRIP_H` = 67,680 B), draw the strip into it, copy
+   those rows only to the live buffer.
+3. `bmp_idle_copy` has no row range, so add one — a loop over `BMPPITCH` for
+   `y0..y1`, three lines next to the existing function, or a local helper in
+   film_sim.c if we would rather not touch ML.
+
+The header sheen keeps its own band (the 46-row header) and ticks at 260 ms,
+so it becomes the second region rather than a full repaint. Two cached bands,
+not a general damage list.
+
+Cost: +66 KB of buffer (67,680 B), ~10 lines of plumbing. Expected saving: most of the
+691 KB per frame, and it removes the flicker question around `film.sim.direct`
+because the band is still double-buffered — only smaller.
+
+**Verify:** a `shelf: paint` line in FILMSIM.LOG with draw ms, copy ms and the
+rows copied, once per second. Before/after the change, same session, same move.
+
+### Stage 3 — the shading. This is where their look actually comes from.
+
+Perspective scale, per-item light, a floor shadow and a reflection are what
+make their shelf read as objects in a space. None of it needs a 3D engine — it
+needs a palette that can express a gradient, which ours cannot: `gui/fsg.h`
+allows only fixed constants with an exact `ml_color()` mapping.
+
+Their answer, from `fos_gfx.h`: **254 palette entries shared across 10 tonal
+ramps**, each ramp near-black → hue → light tint; every colour is "a ramp and a
+level along it"; a 4×4 ordered dither supplies four bits of sub-level between
+neighbouring entries.
+
+For us the change is contained, because `fsg_fill(x,y,w,h,colour)` already
+takes one colour and every screen goes through it:
+
+1. Allocate the palette as ramps + levels instead of named constants
+   (`FSG_RED`, `FSG_AMBER` … become `(ramp, level)` pairs).
+2. Add `fsg_fill_shaded(x,y,w,h,ramp,level,dither)` — level varies with x, and
+   the 4×4 bayer term is added before quantising.
+3. The shelf then needs no new primitives: a cell is a vertical gradient per
+   column, a shadow is the same fill through a dither, and the reflection is
+   the cell flipped with a level ramp.
+
+Cost: the largest of the four — `fsg.c` has 74 `fsg_fill()` call sites, nearly
+all of them passing a named constant.
+Risk: the palette is shared with the develop screens and the picture-style
+palette switching (`fs_picture_palette`), so the ramps have to be installed
+without disturbing that.
+
+**Verify:** `tools/gui_preview` already compiles the camera's own `fsg.c` into
+an RGB buffer and writes PNGs; every stage-3 frame can be compared there
+without a camera, and `film_eval/gui/` already holds the current renders to
+diff against.
+
+### Stage 4 — degrade instead of stutter.
+
+Copy `frame_stats()`'s shape: measure draw+copy per second; if the average
+exceeds ~50 ms drop a quality step, if it stays under ~26 ms raise one back.
+Our steps, cheapest first: (1) skip the cell thumbnails, (2) skip the drop
+shadows, (3) halve the strip to every other frame.
+
+**Verify:** the same `shelf: paint` line, plus a `quality=` field that changes
+on a slow body. This is the one stage that cannot be verified here at all —
+it needs a camera that is actually slow.
+
+### What not to copy
+
+- **Their 28 ms clock as a hard target.** Our panel is 480 rows with a full
+  double buffer through Canon's idle copy; theirs is an overlay with its own
+  buffer. Take the *idea* of a fixed period and the dt-driven integrator, not
+  the number.
+- **Their damage-then-present model.** On the 6D the bitmap VRAM is composited
+  by DIGIC; there is no present call to restrict. What transfers is *drawing
+  less*, not *presenting less*.
+- **Their eight-screen state machine.** The shelf is one screen here; the
+  spring belongs in `fs_shelf_animate`, not in a new UI framework.
+
+### Order, and why
+
+1 → 2 are motion and cost, both verifiable on the host, both reversible, and
+together they give most of the perceived smoothness. 3 is the look, and it is
+a renderer change that touches every screen. 4 depends on 2 existing (there is
+nothing to degrade from until the redraw is scoped).
+
+Stage 1 alone answers "why does it jump"; stage 2 alone answers "why does it
+feel heavy". Neither needs the other, so they can ship separately.
