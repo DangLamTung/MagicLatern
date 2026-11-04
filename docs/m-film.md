@@ -54,6 +54,48 @@ same signature as stock 0, so selecting it changed nothing — the LiveView look
 kept using stock 0's preset. The field is now 7 bits. Found by reviewing the
 change against its callers, not by running it.
 
+### The gap this import left, and the fix
+
+An outside review of these commits found something I had missed and that the
+notes above hid: **the shutter path cannot read a `.cube`.** `fs_yuvhook.c`
+grades the frame Canon is about to encode with `fs_yuvlook_apply()`, whose
+tables are baked from the `.fs` alone — there is no LUT reference anywhere in
+that file. So for the 51 imported stocks:
+
+| path | before the fix |
+|---|---|
+| LiveView | one of ten presets, by name (`fs_stock_preset`) |
+| the shutter JPEG | **ungraded** — the recipe was flat, so the tables were a no-op |
+| Develop | the cube, as intended |
+
+That is silent degradation, which this project does not allow. The fix is
+[`tools/lut2fs.py`](../magiclantern/modules/film_sim/tools/lut2fs.py): project
+the cube onto the only vocabulary the shutter path has. It fits per-channel
+curves along the transform's neutral axis (17 monotone-cubic control points,
+the engine's own interpolator mirrored and cross-checked), and it *fits and
+discards* the six hue axes — measured, they made real photographs worse:
+
+| Vista 200, versus the same frame developed with the cube | IMG_9937 | IMG_9920 |
+|---|---|---|
+| flat recipe (what shipped) | 7.70 | 8.23 |
+| curves only (written now) | **3.16** | — |
+| curves + hue + sat | 11.58 | 13.65 |
+
+Across all 51 stocks, one frame each, against a like-for-like flat baseline:
+
+```
+51 stocks: mean fitted 5.93, mean ungraded 13.59 (56% less error)
+worse than ungraded: 0
+IMG_9920: mean fitted 7.73, mean ungraded 13.04 (41% less error)
+          worse than ungraded: 1 (Infrared 400)
+```
+
+So the shutter JPEG now carries the cube's tone and cast, 41–56 % closer to
+what Develop shows, and never worse than it was — except Infrared 400 on one
+frame. Its colour is still Develop's job: a separable model cannot carry what
+a film cube does to saturated colours, and pretending otherwise measured worse
+than leaving it alone.
+
 ### Measured
 
 ```
