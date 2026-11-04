@@ -326,7 +326,7 @@ that claim was about a full-screen repaint, which stage 2 removes.
 
 </details>
 
-### Stage 2 — redraw only the strip. **Done.** (module md5 `80e2c6f6`, installed)
+### Stage 2 — redraw only the strip. **Done.** (module md5 `e9d5aa8c`, installed)
 
 `fs_paint_band(y0, y1, fn)` does the same double-buffering as `fs_paint()` but
 copies only the rows the band covers, and the shelf now tracks three kinds of
@@ -367,8 +367,15 @@ tied it to the redraw rate; band repaints would have tripled the ENGIO traffic
 for nothing. It is a fixed 250 ms now.
 
 **Not verified:** the camera. The line to read is
-`shelf: paint N frames, M ms, R rows` in `ML/LOGS/FILMSIM.LOG`; before this
-change every second of animation cost 480 rows per frame in the count.
+`shelf: paint N frames, M ms, R rows` in `ML/LOGS/FILMSIM.LOG`; R counts rows
+*actually copied* (0 in direct mode, where nothing is copied, so the line
+cannot claim a saving that did not happen).
+
+**Still jumpy, and not fixed:** the header sheen. Its sweep advances 1 px per
+9 ms but the band is only repainted every 260 ms, so the bar jumps ~29 px per
+step. It was like that before this work and it is a 46-row band now, so running
+it on the 30 ms clock would still cost less than the old at-rest full repaint
+(2.2 MB/s against 5.3 MB/s) -- a one-line change, left for a separate decision.
 
 
 
