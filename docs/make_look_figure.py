@@ -2,7 +2,7 @@
 """Draw what a custom look does, and how it travels.
 
 Two looks are shown: FILM SIM / Classic Chrome (the Fujifilm-style one this
-project already ships) and a new Olympus-style recipe, films/olympus_natural.fs.
+project already ships) and a new Olympus-style recipe, films/OLYNAT.fs.
 Neither picture on the page is an invention: both are sampled out of the .cube
 that fs2cube exports from the recipe itself, so the swatches are the engine's
 own answer for that input colour.
@@ -37,7 +37,7 @@ FONT_B = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 
 LOOKS = [
     ("Fujifilm-style", "Classic Chrome", "classicchrome.fs", "1.82"),
-    ("Olympus-style", "Natural (authored)", "olympus_natural.fs", "3.77"),
+    ("Olympus-style", "Natural (authored)", "OLYNAT.fs", "3.77"),
 ]
 
 PATCHES = [
