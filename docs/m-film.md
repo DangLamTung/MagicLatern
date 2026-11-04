@@ -275,7 +275,27 @@ Our strip is already a **continuous field** — `dx = ((i*256 - scroll) * 108) /
 architecture; we are missing the easing, the clock, the redraw scope and the
 shading.
 
-### Stage 1 — the spring. Smallest change, fixes the visible fault.
+### Stage 1 — the spring. **Done.** (module md5 `7477743`, installed)
+
+`gui/fs_spring.h` holds the integrator; `fs_shelf_animate(dt)` calls it and
+the shelf loop's clock is 30 ms. `se/hosttest/springtest` runs the same header
+and prints, per move, the number of frames and the largest single step:
+
+```
+   1 shelves, 30 ms frames: spring  16 frames ( 480 ms)  biggest step  17.2%
+   1 shelves, 70 ms frames: was     15 frames (1050 ms)  biggest step  33.2%
+   3 shelves, 30 ms frames: spring  21 frames ( 630 ms)  biggest step  17.2%
+   3 shelves, 70 ms frames: was     18 frames (1260 ms)  biggest step  33.3%
+  10 shelves, 30 ms frames: spring  25 frames ( 750 ms)  biggest step  17.2%
+```
+
+Frames drawn per glide barely moved (15 → 16 for one shelf), so the CPU per
+move is the same and only the wall time halves — which is the whole point.
+
+Below is the plan as it was written, kept so the later stages can be read
+against it.
+
+<details><summary>the plan as originally written</summary>
 
 Replace the body of `fs_shelf_animate()` (film_sim.c, ~line 3310) with their
 integrator, keeping `fs_anim_scroll` in the same 1/256 frame units and adding
@@ -304,7 +324,9 @@ inside ~600 ms.
 task starve. The existing note in the loop says the opposite was true at 14 Hz;
 that claim was about a full-screen repaint, which stage 2 removes.
 
-### Stage 2 — redraw only the strip, and stop double-buffering it.
+</details>
+
+### Stage 2 — redraw only the strip, and stop double-buffering it. **Next.**
 
 `fs_paint()` in film_sim.c calls `bmp_idle_copy(0,0)` … render …
 `bmp_idle_copy(1,0)`, and each of those copies **720 × 480 bytes** (`bmp.c:181`).
