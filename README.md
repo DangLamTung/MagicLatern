@@ -377,3 +377,23 @@ than sit under it.
 Two converted cubes are in `luts_bin/`. The error is concentrated where the cube
 is steep — that is the source data, not the converter: sampled at its own 17 grid
 nodes the packed file matches the original to 0.002/255.
+
+## 84 film stocks, and what came from M-Film
+
+The shelf now holds **84 stocks**: the 33 tuned here, plus 51 imported from
+[M-Film](https://github.com/HNGSeries/M-Film)'s catalogue. Their colour comes
+from the MIT-licensed [Film-Luts](https://github.com/YahiaAngelo/Film-Luts)
+collection, baked into a per-stock `ML/FILMSIM/LUT/<CODE>.BIN` and referenced
+by the `<lut>` tag of the stock's XML; the stock's `.fs` carries grain and
+halation only. A stock's own LUT is used whether or not **Develop ▸ External
+LUT** is on — it is part of the stock, not a session option.
+
+```sh
+python3 magiclantern/modules/film_sim/tools/mfilm_import.py --list
+python3 magiclantern/modules/film_sim/tools/mfilm_import.py --all-missing --out /Volumes/EOS_DIGITAL
+```
+
+[What else that repository has worth taking, and what it measures →](docs/m-film.md)
+— the spring-driven shelf animation, the palette-ramp renderer, the synthetic
+RAW fixture generator, the qemu instruction profiler, and their measured 6D
+boot reservation of 848 KB against our 592 KB.
