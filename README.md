@@ -42,14 +42,28 @@ uses, so what the LCD shows is what the preview renders.
 
 ## Before and after
 
-![Canon's own ungraded JPEG above, the same frame with Kodak Portra 400 graded at the shutter below](docs/img/before-after.jpg)
+![Canon's own ungraded JPEG at the top, the same frame through Kodak Portra 400 below, then Gold 200, Velvia 50 and Ektachrome 100](docs/img/before-after.jpg)
 
-Top: standard Canon Neutral JPEG capture. Bottom: the same frame with
-`portra.fs` graded directly into the frame buffer at the shutter. One shot, one JPEG file, no batch work.
+One frame (`IMG_3211.CR2`), Canon's own Neutral JPEG first and then four stocks
+through the engine. Same pixels, four recipes: Portra 400 stays muted and warm,
+Gold 200 pushes yellow, Velvia 50 goes deep green and orange, Ektachrome 100
+stays close to the scene. Rendered by the same code the camera's Develop runs,
+on the camera's own CR2 — the recipes are the shipped `.fs` files.
 
 ## Same frame, four stocks
 
-![One frame through many stocks](docs/img/stock-stack.jpg)
+![One frame through four stocks](docs/img/stock-stack.jpg)
+
+What each stock actually does differently, measured on this frame over the whole
+picture (mean chroma spread / mean luma):
+
+| stock | chroma | luma | character |
+|---|---|---|---|
+| Canon Neutral | 34.6 | 121.6 | the reference |
+| Portra 400 | 52.1 | 140.3 | muted greens, warm skin, lifted shadows |
+| Gold 200 | 48.8 | 130.3 | yellow, nostalgic mids |
+| Velvia 50 | 55.8 | 101.6 | deep saturated greens, dark shadows |
+| Ektachrome 100 | 41.2 | 112.0 | neutral slide film, clean highlights |
 
 ## How the look gets into the file
 
