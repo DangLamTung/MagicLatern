@@ -112,8 +112,41 @@ flowchart LR
     B2 --> B4
 ```
 
-The same two rows as one image, for viewers without Mermaid:
-[capture pipeline](docs/img/capture-pipeline.png).
+The same two rows as one image, for viewers without Mermaid, **and the
+LiveView lane below them** — what ML's display filter does to every preview
+frame, and what the two lanes share:
+[capture pipeline](docs/img/capture-pipeline.png)
+([source](docs/make_pipeline_figure.py)).
+
+### What LiveView reuses, and what it does not
+
+The LiveView lane is a different entry point — ML's display filter, called per
+preview frame, not Canon's encoder call — but it is the same problem: grade a
+UYVY frame in place before something reads it.
+
+| | LiveView | The shot |
+|---|---|---|
+| entry | `CBR_DISPLAY_FILTER` → `fs_display_filter` | `0xFF16E930` `sssCompleteSsrawToYuv` |
+| source | Canon's plane, 720×480, 691,200 B | 5472×3648, stride 10944 |
+| coherence | whole plane copied to `fs_snap` first (11 ms) | grades Canon's own buffer in place |
+| grade | `fs_core_process_rows`, tables from `fs_presets[]` | `fs_yuvlook_apply`, tables baked from the `.fs` recipe |
+| cost | `lv_frame: copy=10ms grade=89ms` | about 2 s including the D-cache clean |
+| shares | aspect-bar geometry (`fs_core_aspect_bars`), the signed-chroma UYVY word, the D-cache alias rule, `fs_sync()` gating | same |
+
+The two grade engines are **not** the same look. The preview picks one of ten
+presets by stock (`fs_lut_t`, 1.5 KB, no per-hue table); the shot is graded by
+the recipe actually selected (`se_yuvtbl`, 3,080 B, 32×32 hue cells). On one
+real LiveView frame the two disagree by **mean 36.7 levels, 83 % of samples
+more than 8** — measured with `se/hosttest/bench_grade`, which also times them:
+
+```
+preview  fs_core_process_rows    0.26-0.31 ms/frame
+shot     fs_yuvlook_apply+copy   0.36-0.44 ms/frame   (3 runs, this PC; use the ratio)
+```
+
+So pointing LiveView at the shot's baked tables would give an exact preview for
+about 1.4× the arithmetic — not free, and the preview is already over its 33 ms
+budget, so it is a real change rather than an obvious one.
 
 Read it as two questions, because that is how it was verified:
 
