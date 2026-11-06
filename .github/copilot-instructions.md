@@ -177,16 +177,21 @@ run as evidence unless the card shows the files afterwards.
 * **The camera palette is 8-bit indices, not RGB.** Only the constants in
   `gui/fsg.h` may be drawn; each one has an exact `ml_color()` mapping. No
   gradients, no blends, no per-stock colours -- those cannot exist on the panel.
-* The host backend lives in the module (`gui/fsg_host.c`), not in the parent
-  repo's `tools/gui_preview/`, because `se/hosttest` builds `creatorwrite`
-  from it and a standalone clone of the module repo has no parent.
-* Preview: `gcc -O1 -Imagiclantern/modules/film_sim tools/gui_preview/preview.c
-  magiclantern/modules/film_sim/gui/fsg_host.c
-  magiclantern/modules/film_sim/gui/fsg.c
-  magiclantern/modules/film_sim/gui/fsg_dat.c -o /tmp/fsg_preview &&
-  /tmp/fsg_preview <path to FILMCAN.DAT> && python3 tools/gui_preview/render.py`
-  writes `/tmp/fsg_*.png`. Run it with no argument to preview the no-artwork
-  fallback; rendered frames are kept in `film_eval/gui/`.
+* The preview tooling lives in the module, not in the parent repo: `gui/fsg_host.c`
+  is the backend `se/hosttest` builds `creatorwrite` from,
+  `tools/gui_preview/preview.c` drives the screens and `render.py` composites
+  them. A standalone clone of this repo has no parent, so anything the tests
+  need must be in here.
+* Preview, from the module repo root:
+  `gcc -O1 -Imodules/film_sim modules/film_sim/tools/gui_preview/preview.c
+  modules/film_sim/gui/fsg_host.c modules/film_sim/gui/fsg.c
+  modules/film_sim/gui/fsg_dat.c -o /tmp/fsg_preview &&
+  /tmp/fsg_preview <path to FILMCAN.DAT> &&
+  python3 modules/film_sim/tools/gui_preview/render.py`
+  writes `/tmp/fsg_*.png` and `/tmp/fsg_sheet.png`. Run the preview with no
+  argument to see the no-artwork fallback; rendered frames are kept in
+  `film_eval/gui/`. `render.py` renders whatever frames the preview wrote --
+  it used to hold a hardcoded list that rotted.
 * Animation is state in the caller: `fs_anim_scroll` eases toward the selected
   stock (1/256 frame units) and the shelf loop redraws on a 70 ms clock, so the
   strip scrolls instead of jumping.

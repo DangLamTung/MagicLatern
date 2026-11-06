@@ -391,7 +391,7 @@ what the panel says still sets the whole screen.
 Two things had to be checked, because none of this can be tried on the camera
 here:
 
-1. **Is a band self-contained?** `tools/gui_preview` now draws the whole shelf,
+1. **Is a band self-contained?** `modules/film_sim/tools/gui_preview` now draws the whole shelf,
    wipes the framebuffer to a sentinel, draws one band, and compares the pixels
    *and* the text runs:
 
@@ -484,7 +484,7 @@ Risk: the palette is shared with the develop screens and the picture-style
 palette switching (`fs_picture_palette`), so the ramps have to be installed
 without disturbing that.
 
-**Verify:** `tools/gui_preview` already compiles the camera's own `fsg.c` into
+**Verify:** `modules/film_sim/tools/gui_preview` already compiles the camera's own `fsg.c` into
 an RGB buffer and writes PNGs; every stage-3 frame can be compared there
 without a camera, and `film_eval/gui/` already holds the current renders to
 diff against.

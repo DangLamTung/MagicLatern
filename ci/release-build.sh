@@ -80,7 +80,14 @@ say "romfind unit tests"
 # "clean" because the platform build does not notice module source changes on
 # its own, and a release is exactly the moment that mistake is unrecoverable.
 say "build $CAM"
-./build.sh "$CAM" clean 2>&1 | tee /tmp/fs_build.log
+# Not `./build.sh | tee`: sh has no pipefail, so the pipe would report tee's
+# status and a failed build would be blamed on the import gate below.
+if ! ./build.sh "$CAM" clean > /tmp/fs_build.log 2>&1; then
+    tail -n 40 /tmp/fs_build.log >&2
+    echo "build failed" >&2
+    exit 1
+fi
+tail -n 8 /tmp/fs_build.log
 
 # A module that imports a symbol the body does not export loads with "module
 # load error" and no log at all. build.sh fails on it, but say it out loud so
@@ -109,8 +116,7 @@ cp "$BIN" "$DIST/autoexec-$CAM.bin"
 cp "$MOD" "$DIST/film_sim-$CAM.mo"
 [ -f "magiclantern/modules/mlwifi/build/mlwifi.mo" ] && \
     cp "magiclantern/modules/mlwifi/build/mlwifi.mo" "$DIST/mlwifi-$CAM.mo" || true
-grep -q "ALL HOST TESTS PASSED" /tmp/fs_hosttests.log && \
-    cp /tmp/fs_hosttests.log "$DIST/hosttests.log"
+cp /tmp/fs_hosttests.log "$DIST/hosttests.log"
 
 say "checksums"
 ( cd "$DIST" && { shasum -a 256 ./* 2>/dev/null || sha256sum ./*; } ) | tee "$DIST/SHA256SUMS"
