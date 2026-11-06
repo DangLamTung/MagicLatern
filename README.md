@@ -8,7 +8,7 @@ frames the sensor at **65:24**, the panoramic shape of a Hasselblad XPan.
 
 ## The photographs
 
-Six frames, one per look, straight off the card — the strip above is these.
+Six frames from Đà Lạt — the strip above, frame by frame.
 
 | | |
 |---|---|
