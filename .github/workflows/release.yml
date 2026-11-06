@@ -54,7 +54,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
+          # The notes are written by the build script, so what a release says is
+          # the same text whether it was published from CI or by hand.
           gh release create "$TAG" dist/* \
             --title "$TAG" \
             --generate-notes \
-            --notes "Built from MagicLatern-ML \`${{ github.event.inputs.module_ref || 'dev' }}\`. Host tests passed; see hosttests.log in the assets."
+            --notes-file dist/RELEASE-NOTES.md
+
+          # The .mo hashes move with every commit: the module embeds its build
+          # revision, so two builds of the same tree match and two different
+          # commits never do.

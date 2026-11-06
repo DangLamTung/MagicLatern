@@ -118,6 +118,27 @@ cp "$MOD" "$DIST/film_sim-$CAM.mo"
     cp "magiclantern/modules/mlwifi/build/mlwifi.mo" "$DIST/mlwifi-$CAM.mo" || true
 cp /tmp/fs_hosttests.log "$DIST/hosttests.log"
 
+cat > "$DIST/RELEASE-NOTES.md" <<NOTES
+Built from MagicLatern-ML \`$(git -C magiclantern rev-parse --short HEAD 2>/dev/null || echo unknown)\`
+($MODULE_REF). The host tests and the ROM-tool unit tests passed before anything
+was packaged; the log is in \`hosttests.log\`.
+
+| asset | what it is |
+|---|---|
+| magiclantern-$CAM.zip | the ML tree to copy onto the card, film_sim included |
+| autoexec-$CAM.bin | the bootloader payload alone, if that is all you replaced |
+| film_sim-$CAM.mo | the module on its own |
+| mlwifi-$CAM.mo | WiFi probe, shipped apart on purpose: it is not in the zip because it only verifies nine addresses and calls nothing yet |
+| hosttests.log | the test run this build came from |
+| SHA256SUMS | every file above |
+
+A .mo hash identifies one build, not a tree: the module embeds its build time
+(`2026-11-06 09:15:18 UTC` and three differing bytes is the whole delta between
+two builds of the same source). Use SHA256SUMS to check a download, not to
+decide whether two builds agree -- compare commit ids for that, and compare the
+card against the build you just installed.
+NOTES
+
 say "checksums"
 ( cd "$DIST" && { shasum -a 256 ./* 2>/dev/null || sha256sum ./*; } ) | tee "$DIST/SHA256SUMS"
 
