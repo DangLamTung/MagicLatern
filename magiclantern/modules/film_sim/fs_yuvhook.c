@@ -1121,6 +1121,10 @@ void fs_yuvhook_uninstall(void)
 }
 
 void fs_yuvhook_grade(int rows) { fs_yuv_grade_rows = rows; }
+/* What the hook was armed with. 0 means the grade is off, and every other
+ * counter in the summary then stays 0 -- which reads exactly like "the hook
+ * never ran". A shot that did not grade has to be able to say that. */
+int  fs_yuvhook_grade_rows(void) { return fs_yuv_grade_rows; }
 
 /*
  * When set, the frame is copied into memory the module owns while we are still

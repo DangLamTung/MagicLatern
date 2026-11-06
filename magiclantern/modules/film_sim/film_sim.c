@@ -8209,10 +8209,19 @@ static void fs_lv_monitor_task(void *unused) {
                  fs_yuvhook_site_diag(1));
         }
         if (g == 0) {
-          fs_log("yuvhook: %d call(s) (%d still, %d ssraw), 0 graded; last "
-                 "pc=%08x regs %08x %08x %08x %08x; chunks %d [%d %d %d %d] "
-                 "sniff 0x%x suite %d bare %d nobuf %d badsize %d",
+          /* The per-site codes are the whole diagnosis: 1 graded, 2 not a
+           * picture, 3 no stride, 4 plane/safe-rows, 5 fingerprint skip. */
+          fs_log("yuvrefuse: jpeg site diag %d of %d calls, ssraw site diag %d "
+                 "of %d calls", fs_yuvhook_site_diag(0),
+                 fs_yuvhook_site_calls(0), fs_yuvhook_site_diag(1),
+                 fs_yuvhook_site_calls(1));
+          fs_log("yuvhook: %d call(s) (%d still, %d ssraw), 0 graded; armed "
+                 "rows %d, ready %d, level %d; last pc=%08x regs %08x %08x %08x "
+                 "%08x; chunks %d [%d %d %d %d] sniff 0x%x suite %d bare %d "
+                 "nobuf %d badsize %d",
                  nc, fs_yuvhook_site_calls(0), fs_yuvhook_site_calls(1),
+                 (int)fs_yuvhook_grade_rows(), (int)fs_yuvlook_ready(),
+                 fs_level(),
                  (unsigned)fs_yuvhook_last_pc(),
                  (unsigned)fs_yuvhook_last_reg(0), (unsigned)fs_yuvhook_last_reg(1),
                  (unsigned)fs_yuvhook_last_reg(2), (unsigned)fs_yuvhook_last_reg(3),

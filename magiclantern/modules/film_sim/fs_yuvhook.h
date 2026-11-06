@@ -29,6 +29,7 @@ int  fs_yuvhook_write(const char *path);   /* 1 = written */
  * fs_yuvhook_grade_ms() after the dump is written.
  */
 void fs_yuvhook_grade(int rows);
+int  fs_yuvhook_grade_rows(void);   /* 0 = not grading */
 /* Aspect mode (see fs_core_aspect_ratio) to burn into the shot, 0 = none. */
 void fs_yuvhook_bars(int mode);
 int fs_yuvhook_bars_burned(void);
