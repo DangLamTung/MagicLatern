@@ -13,6 +13,7 @@
 
 #include "fsg.h"
 #include "fsg_creator.h"
+#include "fs_num.h"
 
 /* ---- colours ---------------------------------------------------------- */
 
@@ -539,7 +540,10 @@ void fsg_draw_creator(const fs_creator_t *c)
     fs_creator_register_palette();
 
     fsg_fill(0, 0, FSG_W, FSG_H, FSG_BG);
-    snprintf(right, sizeof right, "WEDGE %02d / %02d", c->sel + 1, FS_CREATOR_WEDGES);
+    { char a[4], b[4];
+      fs_pad_num(a, sizeof a, c->sel + 1, 2);
+      fs_pad_num(b, sizeof b, FS_CREATOR_WEDGES, 2);
+      snprintf(right, sizeof right, "WEDGE %s / %s", a, b); }
     header("COLOR CREATOR", c->stock, right);
 
     /* Three series tabs above the wheel */

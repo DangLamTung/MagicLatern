@@ -40,6 +40,7 @@
 #include "fs_yuvhook.h"
 #include "fs_yuvlook.h"
 #include "gui/fsg.h"
+#include "gui/fs_num.h"
 #include "gui/fsg_creator.h"
 #include "gui/fsg_wb.h"
 #include "gui/fs_spring.h"
@@ -735,10 +736,12 @@ static void fs_run_render_test(int preset, int strength, int grain) {
 
   char dir[32];
   int base = hh * 10000 + mi * 100 + ss;
-  snprintf(dir, sizeof(dir), "ML/FILMSIM/R%06d", base);
+  { char pad[12]; fs_pad_num(pad, sizeof pad, base, 6);
+    snprintf(dir, sizeof(dir), "ML/FILMSIM/R%s", pad); }
   for (int n = 1; FIO_CreateDirectory(dir) != 0 && n <= 20; n++) {
     /* no RTC on the bench, or a second run in the same second */
-    snprintf(dir, sizeof(dir), "ML/FILMSIM/R%06d", base + n);
+    { char pad[12]; fs_pad_num(pad, sizeof pad, base + n, 6);
+      snprintf(dir, sizeof(dir), "ML/FILMSIM/R%s", pad); }
   }
 
   char path[64];
@@ -770,8 +773,13 @@ static void fs_run_render_test(int preset, int strength, int grain) {
   FILE *f = FIO_CreateFile(path);
   if (f) {
     my_fprintf(f, "film_sim offline render test\n");
-    my_fprintf(f, "date %04d-%02d-%02d %02d:%02d:%02d\n", yy, mo, dd, hh, mi,
-               ss);
+    {
+      char y4[8], m2[4], d2[4], h2[4], n2[4], s2[4];
+      fs_pad_num(y4, sizeof y4, yy, 4); fs_pad_num(m2, sizeof m2, mo, 2);
+      fs_pad_num(d2, sizeof d2, dd, 2); fs_pad_num(h2, sizeof h2, hh, 2);
+      fs_pad_num(n2, sizeof n2, mi, 2); fs_pad_num(s2, sizeof s2, ss, 2);
+      my_fprintf(f, "date %s-%s-%s %s:%s:%s\n", y4, m2, d2, h2, n2, s2);
+    }
     my_fprintf(f, "frame %dx%d UYVY (pitch %d), synthetic scene\n", FS_TEST_W,
                FS_TEST_H, FS_TEST_PITCH);
     my_fprintf(f, "\nwhat this does\n");
@@ -937,10 +945,12 @@ static int fs_next_img_number(void) {
    * trusting only what the list happens to contain. */
   for (n = mx + 1; n < 10000; n++) {
     uint32_t sz = 0;
-    snprintf(path, sizeof path, "%s/IMG_%04d.JPG", dir, n);
+    { char pad[8]; fs_pad_num(pad, sizeof pad, n, 4);
+      snprintf(path, sizeof path, "%s/IMG_%s.JPG", dir, pad); }
     if (FIO_GetFileSize(path, &sz) == 0 && sz > 0)
       continue;
-    snprintf(path, sizeof path, "%s/IMG_%04d.CR2", dir, n);
+    { char pad[8]; fs_pad_num(pad, sizeof pad, n, 4);
+      snprintf(path, sizeof path, "%s/IMG_%s.CR2", dir, pad); }
     if (FIO_GetFileSize(path, &sz) == 0 && sz > 0)
       continue;
     break;
@@ -960,7 +970,8 @@ static int fs_src_number(const char *photo) {
 }
 
 static void fs_dev_marker(int srcnum, char *buf, int cap) {
-  snprintf(buf, cap, "ML/SETTINGS/DEV_%04d.MRK", srcnum);
+  { char pad[8]; fs_pad_num(pad, sizeof pad, srcnum, 4);
+    snprintf(buf, cap, "ML/SETTINGS/DEV_%s.MRK", pad); }
 }
 
 static int fs_dev_is_done(int srcnum) {
@@ -3311,7 +3322,10 @@ static void fs_shelf_state(fsg_shelf_t *st) {
   }
   {
     static char counter[16];
-    snprintf(counter, sizeof counter, "%02d / %02d", idx + 1, count);
+    { char a[4], b[4];
+      fs_pad_num(a, sizeof a, idx + 1, 2);
+      fs_pad_num(b, sizeof b, count, 2);
+      snprintf(counter, sizeof counter, "%s / %s", a, b); }
     st->counter = counter;
   }
   st->scroll = fs_anim.x >> 8; /* Q16 frames -> 1/256 frame units */
@@ -5301,7 +5315,7 @@ static void fs_share_look_task(void *unused)
   {
     const char *leaf = strrchr(src, '/');
     leaf = leaf ? leaf + 1 : src;
-    snprintf(name, sizeof name, "%.39s", leaf);
+    snprintf(name, sizeof name, "%s", leaf);
   }
 
   {
@@ -5315,7 +5329,7 @@ static void fs_share_look_task(void *unused)
       NotifyBox(1800, "Share: cannot read the recipe");
       return;
     }
-    snprintf(dst, sizeof dst, FS_SHARE_DIR "/%.40s.fs", name);
+    snprintf(dst, sizeof dst, FS_SHARE_DIR "/%s.fs", name);
     out = FIO_CreateFile(dst);
     if (!out) {
       FIO_CloseFile(in);
@@ -5344,14 +5358,14 @@ static void fs_share_look_task(void *unused)
   }
 
   /* a plain-text note beside it: the same look, readable without this module */
-  snprintf(txt, sizeof txt, FS_SHARE_DIR "/%.40s.txt", name);
+  snprintf(txt, sizeof txt, FS_SHARE_DIR "/%s.txt", name);
   {
     FILE *f = FIO_CreateFile(txt);
     if (f) {
       char line[200];
       int m = snprintf(line, sizeof line,
           "Film simulation recipe shared from Magic Lantern film_sim.\n"
-          "File:    ML/SHARE/%.40s.fs (%d bytes)\n"
+          "File:    ML/SHARE/%s.fs (%d bytes)\n"
           "Source:  %s\n"
           "Use:     copy the .fs into ML/FILM on another camera; the watch task\n"
           "         adopts it within a few seconds, no reboot.\n"
@@ -5407,7 +5421,7 @@ static void fs_creator_save_task(void *unused) {
     fs_creator_saving = 0;
     return;
   }
-  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", file);
+  snprintf(path, sizeof path, "ML/FILM/%s.fs", file);
   { static int ok; fs_ensure_dir("ML/FILM", &ok); }
   {
     FILE *f = FIO_CreateFile(path);
@@ -5444,7 +5458,7 @@ static void fs_creator_save_task(void *unused) {
    * would erase it. The screen draws this itself, and keeps it until the next
    * value change.
    */
-  snprintf(fs_creator_saved_name, sizeof fs_creator_saved_name, "%.8s", file);
+  snprintf(fs_creator_saved_name, sizeof fs_creator_saved_name, "%s", file);
   fs_creator.saved_name = fs_creator_saved_name;
   fs_creator.saved = 1;
   fs_creator.save_err = 0;
@@ -5715,7 +5729,7 @@ static void fs_fuji_save_task(void *unused) {
    * what made a saved look unfindable -- fs_resolve_stock_path() looks up
    * ML/FILM/<code>.fs and the code came from the label. */
   snprintf(file, sizeof file, "%s", fs_fuji_names[fs_fuji_slot]);
-  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", file);
+  snprintf(path, sizeof path, "ML/FILM/%s.fs", file);
   { static int ok; fs_ensure_dir("ML/FILM", &ok); }
   {
     FILE *f = FIO_CreateFile(path);
@@ -6139,7 +6153,8 @@ static void fs_photo_paths(const char *photo, char *cr2, int c1, char *out,
     int n = fs_src_number(photo);
     uint32_t exists = 0;
     if (n > 0 && n < 10000) {
-      snprintf(out, c2, "%s/IMG_%04d.JPG", dir, n);
+      { char pad[8]; fs_pad_num(pad, sizeof pad, n, 4);
+        snprintf(out, c2, "%s/IMG_%s.JPG", dir, pad); }
       if (!film_sim_replace && FIO_GetFileSize(out, &exists) == 0 &&
           exists > 0) {
         fs_log("develop: %s exists (%d bytes), using a free number", out,
@@ -6151,7 +6166,8 @@ static void fs_photo_paths(const char *photo, char *cr2, int c1, char *out,
     if (n <= 0 || n >= 10000)
       n = fs_next_img_number();
     if (n > 0 && n < 10000)
-      snprintf(out, c2, "%s/IMG_%04d.JPG", dir, n);
+      { char pad[8]; fs_pad_num(pad, sizeof pad, n, 4);
+        snprintf(out, c2, "%s/IMG_%s.JPG", dir, pad); }
     else
       snprintf(out, c2, "%s/FLM_0000.JPG", dir);
   }

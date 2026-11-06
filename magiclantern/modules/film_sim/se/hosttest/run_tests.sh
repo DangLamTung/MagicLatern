@@ -48,5 +48,22 @@ if [ -x ./tableerr ]; then
     fi
 fi
 
+# The camera's vsnprintf has no precision support: "ML/FILM/%.8s.fs" reached a
+# real card as ".8s.fs", and "ML/FILMS/90_%.8s.xml" held <code>%.11s</code>
+# inside it. Width and zero fill are fine -- FILMSIM.LOG's "%08x" addresses
+# print correctly. Checked here because no host compiler will ever catch it:
+# macOS printf implements the format properly, so every host test passes while
+# the camera writes a file called ".8s.fs".
+bad=$(grep -rnE '%\.[0-9]+' \
+        ../../film_sim.c ../../fs_yuvhook.c ../../fs_yuvlook.c \
+        ../../gui/*.c ../../se/*.c ../../se/engine/*.c 2>/dev/null | grep -v '^Binary')
+if [ -z "$bad" ]; then
+    echo "ok   fmtchk (no %.Ns precision specifiers in firmware sources)"
+else
+    echo "FAIL fmtchk (the camera's vsnprintf prints these literally)"
+    echo "$bad" | head -5
+    fail=1
+fi
+
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || echo "HOST TESTS FAILED"
 exit $fail

@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #include "fsg.h"
+#include "fs_num.h"
 
 /* ---- small helpers ----------------------------------------------------- */
 
@@ -283,7 +284,7 @@ static void film_strip(const fsg_shelf_t *s)
       else
         blit_scaled(x + (fw - dw) / 2, y + (fh - dh) / 2, tp, tw, th, dw, dh);
       char num[8];
-      snprintf(num, sizeof num, "%02d", i + 1);
+      fs_pad_num(num, sizeof num, i + 1, 2);
       fsg_text(x + 5, y + fh - 15, FSG_T_SMALL,
                in_gate ? FSG_AMBER : FSG_GREY_DIM, body, "%s", num);
     } else {
@@ -299,7 +300,7 @@ static void film_strip(const fsg_shelf_t *s)
         memcpy(line1, lbl, (size_t)l1);
         line1[l1] = 0;
         if (sp && sp[1]) {
-          snprintf(line2, sizeof line2, "%.6s", sp + 1);
+          snprintf(line2, sizeof line2, "%s", sp + 1);
         } else {
           line2[0] = 0;
         }
@@ -312,7 +313,7 @@ static void film_strip(const fsg_shelf_t *s)
                  in_gate ? FSG_WHITE : FSG_GREY_DIM, body, "%s", line2);
 
       char num[8];
-      snprintf(num, sizeof num, "%02d", i + 1);
+      fs_pad_num(num, sizeof num, i + 1, 2);
       fsg_text(x + fw - 20, y + fh - 15, FSG_T_SMALL,
                in_gate ? FSG_AMBER : FSG_GREY_DIM, body, "%s", num);
     }
@@ -674,8 +675,12 @@ void fsg_draw_shelf(const fsg_shelf_t *s)
     y += 42;
 
     fsg_text(mx, y, FSG_T_SMALL, FSG_GREY_DIM, FSG_PANEL, "ROLL SLOT");
-    fsg_text(mx, y + 16, FSG_T_MED, FSG_AMBER, FSG_PANEL, "%02d / %02d",
-             s->sel + 1, s->count);
+    {
+      char a[4], b[4];
+      fs_pad_num(a, sizeof a, s->sel + 1, 2);
+      fs_pad_num(b, sizeof b, s->count, 2);
+      fsg_text(mx, y + 16, FSG_T_MED, FSG_AMBER, FSG_PANEL, "%s / %s", a, b);
+    }
     y += 44;
 
     /* Recessed Recipe Box */
