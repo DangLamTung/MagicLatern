@@ -6,16 +6,6 @@ A Magic Lantern module for the EOS 6D that does two things the camera cannot do
 on its own: it writes a film look into the JPEG **at the shutter**, and it
 frames the sensor at **65:24**, the panoramic shape of a Hasselblad XPan.
 
-## The photographs
-
-Six frames from Đà Lạt — the strip above, frame by frame.
-
-| | |
-|---|---|
-| ![lake and church tower](docs/img/dalat_1.jpg) | ![pine hills above the town](docs/img/dalat_2.jpg) |
-| ![sun through the pines](docs/img/dalat_3.jpg) | ![people on the hilltop](docs/img/dalat_4.jpg) |
-| ![two figures under a pine](docs/img/dalat_5.jpg) | ![roadside hedge in low sun](docs/img/dalat_6.jpg) |
-
 ## What it is an imitation of
 
 The camera this is modelled on is not a Canon.
@@ -37,8 +27,7 @@ saturation, hue rotation and luminance, instead of six global axes. That is the
 
 **Magic Lantern**, most of all: none of this exists without it. ML is the
 firmware layer that makes a retired Canon body hackable at all — the property
-API, the display filter, the task system, the file I/O on a FAT card, the
-platform headers that make `0xFF16E930` addressable. This project is a module
+API, the display filter, the task system, the file I/O. This project is a module
 bolted onto their work, it is GPL v2 because ML is, and the people who reverse
 engineered this body deserve the credit for everything below that is not the
 look engine. Thank you.
