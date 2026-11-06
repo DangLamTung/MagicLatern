@@ -73,7 +73,12 @@ if [ -f "$SYM" ]; then
     # Only the modules this project ships. Bundled third-party modules import
     # symbols the 6D build does not export (mlv_play, mlv_snd, pic_view, yolo);
     # they are not ours to fix and must not block the build.
-    for mo in "$SRC"/modules/build/film_sim.mo "$SRC"/modules/build/film_lv.mo; do
+    # mlwifi is a probe that ships outside the zip, so a missing import would
+    # not break an install -- it would break the only diagnostic that exists
+    # for the WiFi reversing: the module loads with "module load error" and
+    # writes nothing to the log at all. Gate it like the shipped two.
+    for mo in "$SRC"/modules/build/film_sim.mo "$SRC"/modules/build/film_lv.mo \
+              "$SRC"/modules/build/mlwifi.mo; do
         [ -f "$mo" ] || continue
         "$NM" -u "$mo" | awk '{print $2}' | sort -u > /tmp/ml_undef.$$
         MISSING=$(comm -23 /tmp/ml_undef.$$ /tmp/ml_sym.$$)

@@ -87,6 +87,34 @@ That is possible — the addresses are now known — but it is a different kind 
 risk from calling a named API: no signatures, no ABI guarantee, and a wrong call
 crashes.
 
+## Running the rung-1 probe
+
+`modules/mlwifi/mlwifi.c` is the only code in this repository that touches any of
+this. It reads the first word of each of the nine addresses and reports whether
+it looks like an ARM prologue; it calls nothing.
+
+```sh
+cp magiclantern/modules/build/mlwifi.mo /Volumes/EOS_DIGITAL/ML/modules/
+```
+
+Then on the body: **Modules → mlwifi → Enable**, power cycle, **WiFi → Probe
+WiFi**. It is not in `modules.included` on purpose, so no release zip carries it
+— a probe that pokes at firmware addresses has no business in a build somebody
+installs to take photographs. The release ships it as a separate `mlwifi-*.mo`
+asset instead.
+
+What the log should say, and what the answer means:
+
+| log | meaning |
+|---|---|
+| `probe: 9 of 9 look like functions` | every address in the table is a real function entry; the next rung is worth trying |
+| `probe: N of 9 ...` with `NOT a prologue` | that address is data, a Thumb function, or a mis-decoded instruction boundary. The table in this file needs fixing before anything is called |
+| no line at all | the module did not load — check `ML/LOGS` for a load error, or that it is enabled |
+
+Rung 1 is not a connection and this document does not claim one. Until a rung-2
+call returns with Canon's own `[NWCOM]` lines in the log, the honest status of
+WiFi in this project is **addresses found, stack not driven**.
+
 ## Realistic capability ladder
 
 | rung | what | risk |
