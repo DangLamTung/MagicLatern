@@ -97,3 +97,46 @@ real risk.
 asserts the loaded set follows — that makes the camera side genuinely ready for
 a phone, and it is testable here without a WiFi card. Everything above it is
 somebody else's transport.
+
+## Reversal attempt, 2026-11-06 — what was tried and what it proved
+
+Goal was a **verified address**, not a feature. It was not reached.
+
+### Facts established (reproducible)
+
+| finding | how |
+|---|---|
+| ROM0 = 8 MB at `0xF0000000`, ROM1 = 16 MB at `0xF8000000` | `platform/6D.116/consts.h`; dump sizes match exactly |
+| Flash is also mapped at `0xFF000000` | 831,900 words in ROM1 aim at that window |
+| A name table of 386 entries sits at file `0xC02D90` | longest run of consecutive name pointers; entries are module/task names (`WDT`, `A2BIF`, `ROMC`, `CardServiceMgr`, `CSMgrTask`, one `Unknown383`) |
+| One name → function record exists | `{ptr "NWComState", 0, 0xFF2616C8, 0}`, and `0xFF2616E8` disassembles to `push {r4, lr}` … `pop {r4, pc}` |
+| The ROM has **no** DryOS symbol table | `prop_deliver`, `task_create`, `take_semaphore` all absent from the strings |
+| `socket_create` / `socket_send` do not exist by name | name-blob scan; `NWCommWrap_*` do exist |
+
+ROM identity for reproducing any of this:
+`ROM0.BIN md5 1543b9813c38003d89af666cc07255d7`, `ROM1.BIN md5 8e16eee40721ab0a07b3e15486434fa9`.
+
+### Why it stopped
+
+The plan's gate was: three `NWCommWrap_*` names each resolving to a function that
+contains their own identifying strings. Only `NWComState` resolved. The other
+`NWCommWrap_*` names have **no pointer anywhere in the image**, so they are unused
+strings, not table entries — there is nothing to map.
+
+`socket_create`/`socket_send` are not in the name list at all, so the `yolo`
+requirement cannot be satisfied by name on this body. What exists is Canon's own
+`NWCommWrap_*` (PTP-over-IP), whose entry points are not reachable by the
+string-or-name method.
+
+### What would be needed to continue
+
+Code-first reversing: load ROM1 in Ghidra at `0xFF000000`, start from the WFT/PTP
+command handler and follow the call graph to a transport write. No names, no
+strings to anchor on. That is a project, not a task, and a wrong address in
+`6D_116.sym` makes the module refuse to load (harmless) but a wrong address that
+*does* resolve crashes on call.
+
+### Unaffected by this
+
+`fs_film_watch_task()` makes any `.fs` that reaches `ML/FILM` live without a
+reboot, so recipe push already works for any transport that can write the card.
