@@ -8,11 +8,15 @@
 # other. It is tracked here now, one repo, and nested .gitignore files inside
 # the tree still apply -- magiclantern/.gitignore covers ML's own *.bin/*.o,
 # and modules/film_sim/.gitignore covers the host-test binaries.
-tools/
-toolchain/
-qemu/
-eos6d-v116-win/
-film_eval/
+# Anchored: an unanchored `tools/` also matches magiclantern/modules/film_sim/
+# tools/, which is where the host harnesses, the ROM tool and the screen
+# renderers live -- that mistake shipped a commit with no tools in it and CI
+# failed on a missing preview.c.
+/tools/
+/toolchain/
+/qemu/
+/eos6d-v116-win/
+/film_eval/
 
 # Scratch
 .DS_Store
@@ -20,7 +24,7 @@ film_eval/
 /tmp/
 
 # Release artefacts (ci/release-build.sh writes these)
-dist/
+/dist/
 
 # Third-party downloads kept locally for reference, not ours to redistribute:
 # a commercial app installer and Fujifilm's own LUT package. They are on this

@@ -39,3 +39,8 @@ se/hosttest/fs2cube
 
 # macOS debug bundles: build artefacts, and the DWARF inside them is 100s of KB
 se/hosttest/*.dSYM/
+
+# PPM scratch: simulate_ui.py writes one per stock into pse_work/, ~1 MB each.
+# The glob above only caught tools/sim/*.ppm, not the subdirectory.
+tools/sim/*/*.ppm
+tools/sim/*/*.png
