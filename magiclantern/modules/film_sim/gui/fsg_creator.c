@@ -625,7 +625,17 @@ void fsg_draw_creator(const fs_creator_t *c)
                      c->slot_name ? c->slot_name : "WHEEL");
             fsg_text(ix + iw - (int)strlen(value) * 8, y, FSG_T_SMALL,
                      FSG_WHITE, FSG_PANEL, "%s", value);
-            y += 28;
+            y += 22;
+
+            /* The slot decides the file; the name is what the shelf calls it.
+             * Both are on screen because getting this wrong is what made a
+             * saved look impossible to find again. */
+            fsg_text(ix, y, FSG_T_SMALL, FSG_GREY_DIM, FSG_PANEL, "LOOK NAME");
+            snprintf(value, sizeof value, "%s",
+                     c->look_name ? c->look_name : "WHEEL");
+            fsg_text(ix + iw - (int)strlen(value) * 8, y, FSG_T_SMALL,
+                     FSG_GREEN, FSG_PANEL, "%s", value);
+            y += 26;
         }
 
         /* Save status badge */
@@ -820,6 +830,7 @@ void fs_creator_defaults(fs_creator_t *c, const char *stock)
     }
     c->screen = 0;
     c->slot_name = "WHEEL";
+    c->look_name = "WHEEL";
     c->stock = stock;
 }
 

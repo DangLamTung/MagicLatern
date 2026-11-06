@@ -5077,23 +5077,30 @@ static struct menu_entry fs_menu_name[] = {
  * written as LOOK.fs existed on the card and could not be chosen. Writing the
  * companion XML is what puts it on the shelf, and it survives a reboot.
  */
-static void fs_register_look(const char *name, const char *desc)
+static void fs_register_look(const char *file, const char *label,
+                             const char *desc)
 {
   film_xml_t f;
   char path[64];
 
-  if (!name || !name[0]) return;
+  if (!file || !file[0]) return;
   memset(&f, 0, sizeof f);
-  snprintf(f.name, sizeof f.name, "%s", name);
-  snprintf(f.code, sizeof f.code, "%.11s", name);
+  /* code is how fs_resolve_stock_path() finds ML/FILM/<code>.fs, so it has to
+   * be the file name; name is what the shelf prints and what a user
+   * recognises. They are different on purpose. */
+  snprintf(f.code, sizeof f.code, "%s", file);
+  snprintf(f.name, sizeof f.name, "%s",
+           (label && label[0]) ? label : file);
   snprintf(f.brand, sizeof f.brand, "User");
   snprintf(f.type, sizeof f.type, "Created");
   snprintf(f.description, sizeof f.description, "%s", desc ? desc : "MADE IN COLOR CREATOR");
   f.base = 0x84;        /* Neutral: the look lives in the .fs, not the style */
   f.sharpness = 3;
-  snprintf(path, sizeof path, FILM_DIR "/90_%.8s.xml", name);
+  /* One XML per slot: re-saving a slot overwrites its entry instead of
+   * leaving a second one behind under the previous name. */
+  snprintf(path, sizeof path, FILM_DIR "/90_%s.xml", file);
   fs_write_film_xml(path, &f);
-  fs_log("look: registered %s as %s", name, path);
+  fs_log("look: registered %s ('%s') as %s", file, f.name, path);
   fs_log_flush();
 }
 
@@ -5370,16 +5377,27 @@ static void fs_share_look_trigger(void *priv, int delta)
 static void fs_creator_save_task(void *unused) {
   char buf[2048];
   char path[64];
-  char name[12];
+  char file[12];      /* the slot's file: WHEEL .. WHEEL4 */
+  char label[16];     /* what the shelf will call it     */
   int n;
 
-  if (fs_look_name[0]) snprintf(name, sizeof name, "%s", fs_look_name);
-  else                 fs_slot_file_name(fs_slot_default(), name, sizeof name);
+  /*
+   * The slot owns the file name and the typed name is only a label.
+   *
+   * They used to be the same string, and that is what broke Apply WHEEL: the
+   * look was written as ML/FILM/<typed>.fs while fs_user_look_apply() looked
+   * for a stock called WHEEL, so a look saved under any other name was correct
+   * on the card and unreachable from the menu for ever after. The file is now
+   * always the slot, and the name rides in the XML where the shelf reads it.
+   */
+  fs_slot_file_name(fs_slot_default(), file, sizeof file);
+  if (fs_look_name[0]) snprintf(label, sizeof label, "%s", fs_look_name);
+  else                 snprintf(label, sizeof label, "%s", file);
 
-  fs_log("creator: save task started");
+  fs_log("creator: save task started (slot %s, name %s)", file, label);
   fs_log_flush();
 
-  n = fs_creator_write(&fs_creator, buf, sizeof buf, name);
+  n = fs_creator_write(&fs_creator, buf, sizeof buf, label);
   if (n < 0) {
     NotifyBox(1800, "Creator: recipe did not fit");
     fs_log("creator: format failed");
@@ -5389,7 +5407,7 @@ static void fs_creator_save_task(void *unused) {
     fs_creator_saving = 0;
     return;
   }
-  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", name);
+  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", file);
   { static int ok; fs_ensure_dir("ML/FILM", &ok); }
   {
     FILE *f = FIO_CreateFile(path);
@@ -5408,9 +5426,10 @@ static void fs_creator_save_task(void *unused) {
       return;
     }
   }
-  fs_log("creator: wrote %s (%d bytes, %d wedges)", path, n, FS_CREATOR_WEDGES);
+  fs_log("creator: wrote %s (%d bytes, %d wedges, name %s)", path, n,
+         FS_CREATOR_WEDGES, label);
   fs_log_flush();
-  fs_register_look(name, "MADE IN COLOR CREATOR");
+  fs_register_look(file, label, "MADE IN COLOR CREATOR");
 
   /*
    * Report success BEFORE rebuilding the catalogue.
@@ -5425,7 +5444,7 @@ static void fs_creator_save_task(void *unused) {
    * would erase it. The screen draws this itself, and keeps it until the next
    * value change.
    */
-  snprintf(fs_creator_saved_name, sizeof fs_creator_saved_name, "%.8s", name);
+  snprintf(fs_creator_saved_name, sizeof fs_creator_saved_name, "%.8s", file);
   fs_creator.saved_name = fs_creator_saved_name;
   fs_creator.saved = 1;
   fs_creator.save_err = 0;
@@ -5470,7 +5489,15 @@ static int fs_creator_run(void) {
     fs_creator_initialised = 1;
   }
   fs_name_sync();
-  fs_creator.slot_name = fs_look_name;
+  /* The screen prints the slot's file next to RECIPE SLOT -- so it must be the
+   * slot's file, not the typed name. Both are shown now: the file it will
+   * write, and the name the shelf will use for it. */
+  {
+    static char slot_file[12];
+    fs_slot_file_name(fs_slot_default(), slot_file, sizeof slot_file);
+    fs_creator.slot_name = slot_file;
+  }
+  fs_creator.look_name = fs_look_name;
   /* start settled: a spring beginning at 0 would spin the whole ring into
    * place every time the screen opens */
   fs_creator_spring.x = 0;
@@ -5670,6 +5697,7 @@ static void fs_fuji_ensure_init(void)
 static void fs_fuji_save_task(void *unused) {
   char buf[2048];
   char path[64];
+  char file[12];
   int n;
 
   fs_log("fuji: recipe save task started");
@@ -5682,7 +5710,12 @@ static void fs_fuji_save_task(void *unused) {
   }
   if (!fs_fuji.name[0])   /* the Name row was never displayed */
     snprintf(fs_fuji.name, sizeof fs_fuji.name, "%s", fs_fuji_names[fs_fuji_slot]);
-  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", fs_fuji.name);
+  /* Same rule as the colour creator: the slot owns the file name, the typed
+   * name is the label the shelf prints. Writing the label as the file name is
+   * what made a saved look unfindable -- fs_resolve_stock_path() looks up
+   * ML/FILM/<code>.fs and the code came from the label. */
+  snprintf(file, sizeof file, "%s", fs_fuji_names[fs_fuji_slot]);
+  snprintf(path, sizeof path, "ML/FILM/%.8s.fs", file);
   { static int ok; fs_ensure_dir("ML/FILM", &ok); }
   {
     FILE *f = FIO_CreateFile(path);
@@ -5698,7 +5731,7 @@ static void fs_fuji_save_task(void *unused) {
   }
   fs_log("fuji: wrote %s (%d bytes)", path, n);
   fs_log_flush();
-  fs_register_look(fs_fuji.name, "MADE IN FUJI RECIPE");
+  fs_register_look(file, fs_fuji.name, "MADE IN FUJI RECIPE");
   /* Confirm first, rebuild the catalogue after -- same reason as the creator:
    * the bytes are on the card, and the reload walks every XML on it. */
   NotifyBox(1500, "Saved %s", path);
@@ -7767,7 +7800,11 @@ static void fs_user_look_apply(int slot)
   else           snprintf(want, sizeof want, "WHEEL%d", slot + 1);
 
   for (i = 0; i < n; i++) {
-    if (!strcasecmp(film_active_table[i].name, want)) {
+    /* The slot file name is the identity (see fs_register_look); the name is
+     * the shelf label. Looks saved by an older build carry the typed name in
+     * both fields, so those are still found by the second test. */
+    if (!strcasecmp(film_active_table[i].code, want) ||
+        !strcasecmp(film_active_table[i].name, want)) {
       film_sim_stock = i;
       fs_apply_film_now();
       beep_times(1);

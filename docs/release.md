@@ -24,8 +24,9 @@ reproducible, not to be the only way.
 | the zip/module comparison | a stale `film_sim.mo` cannot ship inside a new zip |
 
 The ARM build itself is not in CI: `build.sh` needs the Darwin toolchain, BSD
-`stat` and `sysctl`, so it runs on a macOS runner. `macos-14` is chosen for
-that reason.
+`stat` and `sysctl`, so it runs on a macOS runner. `macos-26` is the image it asks for --
+`macos-14` was retired from GitHub-hosted runners and a retired label cancels
+the run in one second.
 
 ## Reading the hashes
 

@@ -54,10 +54,12 @@ int main(int argc, char **argv)
 
     fsg_reset();
     fs_creator_defaults(&c, "BASE: FLAT - SELF-CONTAINED");
+    c.look_name = "LOOK";
     dump("creator0");
 
     fsg_reset();
     fs_creator_defaults(&c, "BASE: FLAT - SELF-CONTAINED");
+    c.look_name = "LOOK";
     if (edited) {
         /* a look somebody actually authored: blue up, greens down and
          * rotated, spring lifted a little -- the shape of a real recipe */
@@ -85,6 +87,7 @@ int main(int argc, char **argv)
      * NotifyBox is erased by the next repaint */
     c.saved = 1;
     c.saved_name = "WHEEL2";
+    c.slot_name = "WHEEL2";   /* the badge and the slot must agree */
     c.dirty = 0;
     fsg_reset();
     fsg_draw_creator(&c);

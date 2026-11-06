@@ -57,6 +57,7 @@ typedef struct
      */
     int         save_err;
     const char *slot_name;   /* the file PLAY writes, e.g. "WHEEL2"     */
+    const char *look_name;   /* the name the shelf will show for it     */
     const char *saved_name;  /* what was just written, once it exists   */
 
     const char *stock;   /* base stock name, shown in the header          */
