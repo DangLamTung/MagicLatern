@@ -3,56 +3,44 @@
 Goal: pick a film simulation or a colour recipe on a phone, push it to the
 camera, shoot. This document is the plan; **no part of it is implemented.**
 
-## What decides whether it is possible at all
+## Correction: this body DOES have WiFi
 
-The 6D has an SD card slot and no WiFi of its own. Two routes exist, and only
-one of them works on this body:
+An earlier version of this document said the 6D has no WiFi of its own. That
+is wrong, and the camera's own firmware dump on the card says so. `strings` on
+`ML/LOGS/ROM1.BIN`:
 
-| route | verdict |
+```
+[NWCOM] Wlan Init Err
+[NWCOM] NWCOM WLAN Biltin Judge (0x%x)
+[NWCOM] WIFI_SETTING OFF
+PROP_WIFI_SETTING (%d)
+[FA_NW] FA_ChkWlan : %lx %lx
+GuiPropertyData PROP_WFT_HTTP (%x)<-(%x)
+SetHTTPUserName1<%s>
+ComDLNAResizeSem
+WlanMgr/WlanMgr.c  NWCommu/NWCommuTransOrder.c  NWMgr/NetworkSetting.c
+Lan/DlgLnWirelessConnected.c  LanWizard/LnWizUtility.c
+```
+
+So the body carries WlanMgr, NWCommu, the LAN dialogs, DLNA and the WFT HTTP
+server. Canon's WiFi is present; it is Canon's firmware that drives it.
+
+## What ML can and cannot do with it on this body
+
+| | state |
 |---|---|
-| **SD-card relay** — phone writes to the card, camera reads it | **works today, no code needed.** The camera already reads `ML/FILM/*.fs` and `ML/SETTINGS/*.TXT` at boot. A phone with a card reader, or the camera in mass-storage mode, is a "sync" already |
-| **WiFi on the body** | **not on the 6D.** Canon's WiFi on this generation is a separate WFT/eye-fi accessory or an SD card with WiFi built in. ML cannot add a radio |
-| **SD card with WiFi (Eye-Fi / Toshiba FlashAir / Transcend Wi-Fi)** | **the realistic route.** These present an HTTP server on the card's own network. The camera reads the files it writes; the phone PUTs them |
+| Call Canon's WiFi stack from ML | **not today.** `platform/6D.116/build/6D_116.sym` has no `wlan_connect`, no `socket_create/send/recv` -- the symbols `modules/yolo` uses exist on 200D-class bodies, not here. `yolo.mo` is shipped in the build but cannot resolve those imports on this table |
+| Add them | possible but large: they have to be found by disassembling the firmware (`ROM0.BIN`/`ROM1.BIN` are on the card) and added to the .sym. Legitimate work on your own firmware, zero guarantee it lands |
+| Put files where Canon's app can see them | **works today.** Anything in `DCIM/nnnCANON/` is what the app lists and sends |
 
-So the honest shape of the feature is: **the camera side is already done** —
-it reads recipes from the card. What is missing is a *transport* that writes
-those files, and that transport lives in the card or the phone, not in ML.
+## Raw over WiFi
 
-## Plan
-
-### 1. Camera side (small, buildable now)
-
-Nothing new is needed to *consume* a recipe: `.fs` files under `ML/FILM/` are
-already scanned, grouped and shown on the shelf, and a file can also be
-selected at boot from `ML/SETTINGS/DEVSET.TXT`.
-
-The one gap is **noticing a change without a reboot**. Today the shelf reloads
-after a Develop and after a Save. A file dropped by a phone while the camera
-sits idle would not appear until the next reload. Fix: a `fs_watch_task` that
-stats the directory every few seconds and calls `fs_load_films_xml()` when the
-count or the newest mtime moves. That is the whole camera-side feature, and it
-is measurable on the host by watching a temp directory.
-
-### 2. Card side (no ML code)
-
-A WiFi SD card runs its own filesystem server. The phone app does an HTTP PUT of
-`ML/FILM/<NAME>.fs`. Nothing to implement in ML; it is a card purchase.
-
-### 3. Phone side (real work, but not here)
-
-A PWA that:
-* holds the Fuji field set from `docs/fuji-recipe-fields.md`,
-* renders the same 12-wedge wheel and the same WB grid (the same drawing code
-  could be compiled to WASM, since `gui/fsg.c` only uses `fsg_fill`/`fsg_text`),
-* writes `.fs` text — `gui/fs_fuji.c` and `gui/fsg_creator.c` already contain
-  the two formatters, so the format is fixed by the camera, not by the app,
-* optionally pulls a shared recipe list.
-
-### 4. What "fetch from the internet" would actually mean
-
-The camera cannot. The *phone* can, and then relays to the card. So a "browse
-Fuji X Weekly" feature is a phone feature; the camera's contract is only "watch
-`ML/FILM/` and load what is there".
+The transport is file-level over `DCIM`, and `.CR2` files sit in the same
+folders as `.JPG`, so nothing in the firmware prevents moving a raw file. What
+limits it is Canon's app and firmware policy, and **that is not verified** --
+canon.com was not reachable from here and no authoritative statement was read.
+The check costs two minutes on the camera: connect the app, open the file list,
+see whether a `.CR2` is offered.
 
 ## Hazards, in the order they would bite
 
@@ -71,6 +59,37 @@ Fuji X Weekly" feature is a phone feature; the camera's contract is only "watch
 4. **No authentication.** These cards often serve an open AP. Any recipe
    dropped there is trusted and will be shot — the module already refuses a
    stock with no `NAME`, which is the only sanity check worth having.
+
+## Plan, in order
+
+### 1. Make a developed look reachable by the app (small, now)
+
+Develop writes `IMG_nnnn_F.JPG`. `_F` is not a DCF name, so the camera's own
+list -- and therefore the app's -- has no reason to show it. Give Develop an
+option to write the DCF-legal `IMG_nnnn.JPG` that pairs with the CR2, which is
+what "Replace Camera JPEG" already half does.
+
+### 2. Recipe push (small, now)
+
+Already works if the phone writes the card: `ML/FILM/*.fs` is read at boot.
+The only gap is noticing a change without a reboot. `fs_watch_task` plus a host
+test that drops files into a temp directory and asserts the loaded set follows
+makes the camera side genuinely ready for a phone, and it is testable here
+without a WiFi card.
+
+### 3. Our own server on the camera (large, optional)
+
+Add `wlan_connect` + the `socket_*` family to `6D_116.sym` from the firmware
+dump, then do what `modules/yolo` does on its bodies: a small HTTP server in a
+module, so a phone can pull developed JPEGs, push `.fs` recipes and read the log
+without Canon's app. The only route to an app of our own, and the only one with
+real risk.
+
+### 4. Decide the app question first
+
+- **Canon's app + files** -- no app to write, limited to what Canon lists.
+- **Our server + a web page** -- needs 3.
+- **SD relay** -- works today, no code, no app.
 
 ## What I would build first
 
