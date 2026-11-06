@@ -81,3 +81,8 @@ developer_guide/developer_guide.html
 developer_guide/developer_guide.pdf
 
 syntax: regexp
+
+# The zip archive comment: `make zip` reads src/zip.txt, so it is a build input,
+# not an artefact -- upstream ignores the name because it is also generated in
+# some flows. Without it the package step dies with "src/zip.txt: No such file".
+!src/zip.txt
