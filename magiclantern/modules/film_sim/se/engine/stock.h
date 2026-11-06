@@ -199,9 +199,17 @@ void se_stock_init(se_stock *s);
  *   GRAIN     20
  *   GRAIN_SIZE 30
  *   SAT       120
- *   HUE_SAT   110,70,55,80,95,105   ; R Y G C B M, 100 = unchanged
- *   HUE_ROT   0,-8,-14,6,10,0       ; degrees, + = toward the next
- *   HUE_LUM   104,96,88,98,82,100   ; how bright each hue renders
+ *   HUE_SAT   110,90,70,62,55,67,80,88,95,100,105,108  ; 12 knots, 30 deg
+ *   HUE_ROT   0,-4,-8,-11,-14,-4,6,8,10,5,0,0          ; degrees, + = next
+ *   HUE_LUM   104,100,96,92,88,93,98,98,82,91,100,102  ; how bright
+ *
+ * The hue lines take 12 values, one every 30 degrees, in this order:
+ * R, RY, Y, YG, G, GC, C, CB, B, BM, M, MR (100 = unchanged for SAT and LUM).
+ * A file that writes six (R Y G C B M) still loads: each written value lands
+ * on its 60-degree knot and the midpoint between two is the average of them,
+ * which is exactly what tools/hue12.py writes out. Every stock in films/ is
+ * shipped in the 12-value form, so a bead on the Colour Creator's wheel lands
+ * on a knot and moves only itself.
  *   SPLIT_SH  -6,0,10
  *   SPLIT_HI  10,4,-6
  *   HALATION  40 190 14      ; amount, threshold, radius
