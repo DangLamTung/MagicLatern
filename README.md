@@ -1,6 +1,6 @@
 # Film Sim — Magic Lantern film stocks for the Canon EOS 6D
 
-![A frame shot with Kodak Portra 400 applied at the shutter, 65:24 XPan](docs/img/hero.jpg)
+![A frame through the shipped Kodak Portra 400 recipe, framed 65:24 XPan](docs/img/hero.jpg)
 
 A Magic Lantern module that puts a film stock's colour into the JPEG the camera
 writes, at the shutter, without developing the CR2 afterwards. 33 recipes —
@@ -39,6 +39,124 @@ Measured on the 6D (1.1.6), 5472×3648 frames:
 `SET` moves to the next stock, `Q` goes back, and the strip scrolls. The canister
 artwork is parsed from `ML/data/FILMCAN.DAT` by the same code the host preview
 uses, so what the LCD shows is what the preview renders.
+
+The glide is a spring, not an ease — position and velocity in fixed point,
+integrated in 8 ms sub-steps on the same 30 ms clock the panel repaints on, so a
+late frame cannot fling the strip
+([`gui/fs_spring.h`](magiclantern/modules/film_sim/gui/fs_spring.h)). The
+animation below is that integrator stepped for three slots of travel, one frame
+per tick, drawn by the camera's own strip drawer:
+
+![The strip gliding three stocks, 23 frames at 30 ms](docs/img/shelf_glide.gif)
+
+## The screens
+
+Every screen in this README is drawn by the module's own drawing code
+([`gui/fsg.c`](magiclantern/modules/film_sim/gui/fsg.c),
+[`fsg_creator.c`](magiclantern/modules/film_sim/gui/fsg_creator.c),
+[`fsg_wb.c`](magiclantern/modules/film_sim/gui/fsg_wb.c)) on the desktop, through
+the same two primitives the camera uses: `fsg_fill` and `fsg_text`, implemented
+with `bmp_*` on the panel and into an RGB buffer on a Mac. There is no mockup
+layer, so a row in the wrong place here is a row in the wrong place on the LCD.
+The palette is eight-bit indices — 48 fills for the wheel alone — because that is
+what the panel has:
+
+```sh
+# the shelf and the darkroom
+gcc -O1 -Imagiclantern/modules/film_sim \
+    magiclantern/modules/film_sim/tools/gui_preview/preview.c \
+    magiclantern/modules/film_sim/gui/fsg.c \
+    magiclantern/modules/film_sim/gui/fsg_host.c \
+    magiclantern/modules/film_sim/gui/fsg_dat.c \
+    -o /tmp/fsg_preview -lm
+/tmp/fsg_preview tools/florin_filmroll_1.1/FilmRoll-6D-beta11/ML/data/FILMCAN.DAT
+
+# the creator and the WB screens
+gcc -O1 -Imagiclantern/modules/film_sim \
+    magiclantern/modules/film_sim/tools/gui_preview/creator_preview.c \
+    magiclantern/modules/film_sim/gui/fsg.c \
+    magiclantern/modules/film_sim/gui/fsg_host.c \
+    magiclantern/modules/film_sim/gui/fsg_dat.c \
+    magiclantern/modules/film_sim/gui/fsg_creator.c \
+    magiclantern/modules/film_sim/gui/fsg_wb.c \
+    -o /tmp/fsg_creator -lm
+/tmp/fsg_creator edited
+
+python3 magiclantern/modules/film_sim/tools/gui_preview/render.py   # -> PNG
+python3 magiclantern/modules/film_sim/tools/gui_preview/render.py \
+    --gif /tmp/shelf_glide.gif $(ls /tmp/fsg_anim*.ppm | sed 's|/tmp/fsg_||;s|\.ppm||')
+```
+
+### Colour custom: twelve wedges, in the panel's own palette
+
+![The 12-wedge colour creator, blue wedge at 160 % saturation](docs/img/creator.png)
+
+Twelve wedges, not six axes: each one carries **saturation** (0–200 %), **hue
+rotation** (±180°) and **luminance** (0–200 %), so a wedge can be lifted without
+moving its neighbour. The needle marks the wedge under edit and the ring runs
+through every wedge's current value, which is why a saved look reads as one
+shape rather than as a list of numbers. The fill is 12 wedges × 4 radial bands =
+48 palette entries — the panel is eight-bit indices, so a gradient has to be
+dithered by hand — and a full repaint of this screen costs 0.74 ms on a Mac,
+which is why the camera only redraws the wheel when a value moves.
+
+A saved wheel is a **complete recipe, not a delta** — `fs_creator_write()` emits
+its own curve, twelve `HUE_SAT`, twelve `HUE_ROT` and twelve `HUE_LUM` values,
+with `WB AS_SHOT`, so it loads and grades exactly like a stock. It lands in
+`ML/FILM/WHEEL.fs` (or `WHEEL2`..`WHEEL4` for the other three slots) and
+`User Look ▸ Apply WHEEL2` makes it the active look.
+
+![The same creator after the edit is saved into a slot](docs/img/creator_saved.png)
+
+### The FX and tone screens
+
+![Grain, halation, colour chrome and FX blue on one screen](docs/img/creator_fx.png)
+
+![The tone screen](docs/img/creator_tone.png)
+
+### White balance shift: pushed to the camera, then read back
+
+![Fuji's Red/Blue axes mapped onto Canon's B/A and G/M, green once the camera agreed](docs/img/wb_shift.png)
+
+Fuji's recipe numbers are Red and Blue; Canon's are B/A and G/M. The screen shows
+both, and it only turns green when the camera's own property reports the value
+that was asked for — `prop_request_change()` is fire-and-forget, so "IN CAMERA"
+means a read-back, not a message sent.
+
+### The darkroom
+
+![The darkroom developing a frame](docs/img/develop.png)
+
+## 65:24 XPan
+
+`Aspect ▸ 65:24 XPan` frames the panel at 2.708:1 and Develop writes a real
+5472×2020 JPEG — the rows outside the window are never encoded, so the file is
+smaller and the grain is right. Capture is the honest exception: Canon decides
+the dimensions of the JPEG it writes, so at the shutter the framing is burned in
+as bars (see [Limits](#limits--stated-plainly)).
+
+## A Fuji recipe, field for field
+
+A recipe on a Fuji body is not a screen — it is a bundle of I.Q. menu items saved
+into a C1..C7 slot. Here that bundle is a `.fs`, and the ranges are Fuji's own:
+
+| field | range | what it does |
+|---|---|---|
+| TONE CURVE highlight | −2 … +4 | compresses (−) or lifts (+) the top end |
+| TONE CURVE shadow | −2 … +4 | deepens (−) or lifts (+) the bottom end |
+| COLOR | −4 … +4 | saturation |
+| COLOR CHROME EFFECT | off / weak / strong | deeper gradation in highly saturated colours |
+| COLOR CHROME FX BLUE | off / weak / strong | the same, restricted to blue |
+| GRAIN EFFECT | off / weak / strong | |
+| GRAIN SIZE | small / large | |
+| WB shift R / B | −9 … +9 | pushed to the camera, shown not baked into the `.fs` |
+
+Three fields a published recipe carries are **not** offered, because they cannot
+be honoured here: `DYNAMIC RANGE` (raises ISO and pulls highlights before
+digitising; on an 8-bit JPEG that headroom is already gone), `CLARITY` (needs a
+graded-luma ring — designed, measured, reverted) and `HIGH ISO NR` (Canon's NR
+lives in the picture style and is not driven yet). A knob that does nothing is
+worse than an absent row.
 
 ## Before and after
 
