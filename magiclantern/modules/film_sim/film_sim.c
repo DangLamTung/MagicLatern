@@ -164,6 +164,20 @@ static CONFIG_INT("film.sim.yuvprobe", film_sim_yuvprobe, 0);
 /* Grade the frame inside the shot instead of developing it afterwards.
  * Default 3648 rows (full 5472x3648 still frame). */
 static CONFIG_INT("film.sim.yuvrows", film_sim_yuvrows, 3648);
+
+/*
+ * How much of the look the in-shutter grade applies.
+ *
+ * One core, and the grade sits inside Canon's pipeline, so its cost is added to
+ * every shot: measured on the body at 3648 rows in 103 ms of reported clock
+ * (~1 s of wall time). Measured on a Mac over the same 5472x3648 frame:
+ * 21.0 ms high, 16.7 normal, 4.1 fast. The body scales those the same way.
+ *
+ *   0 High    the look, per-hue cells included          (what it always did)
+ *   1 Normal  drop the per-hue cells: global chroma gain and matrix stay
+ *   2 Fast    tone curve only, chroma left exactly as Canon wrote it
+ */
+static CONFIG_INT("film.sim.gradeq", film_sim_gradeq, 0);
 /*
  * Neutral base at capture, and the switch that arms the in-shutter grade.
  *
@@ -7467,6 +7481,30 @@ static MENU_UPDATE_FUNC(fs_satboost_update) {
                 "saturated. Applies to developed files and to LiveView.");
 }
 
+static const char *fs_gradeq_name(int q) {
+  return q == 0 ? "High" : (q == 1 ? "Normal" : "Fast");
+}
+
+static MENU_UPDATE_FUNC(fs_gradeq_update) {
+  MENU_SET_VALUE("%s", fs_gradeq_name(film_sim_gradeq));
+  MENU_SET_HELP(film_sim_gradeq == 0
+                    ? "High: the full look, per-hue cells included. 21 ms of "
+                      "grade per 5472x3648 frame on the host, ~1 s on the body."
+                    : film_sim_gradeq == 1
+                          ? "Normal: luma curve, global chroma gain and matrix; "
+                            "the per-hue cells are dropped. 16.7 ms on the host."
+                          : "Fast: tone curve only, chroma untouched. 4.1 ms on "
+                            "the host -- but no colour shift, only tone.");
+}
+
+static MENU_SELECT_FUNC(fs_gradeq_select) {
+  menu_numeric_toggle(&film_sim_gradeq, delta, 0, 2);
+  fs_yuvlook_set_quality(film_sim_gradeq);
+  fs_log("grade quality: %s (%d)", fs_gradeq_name(film_sim_gradeq),
+         film_sim_gradeq);
+  fs_log_flush();
+}
+
 static MENU_UPDATE_FUNC(fs_auto_update) {
   MENU_SET_VALUE(film_sim_auto ? "On" : "Off");
   MENU_SET_ICON(film_sim_auto ? MNI_ON : MNI_OFF, 0);
@@ -7792,6 +7830,19 @@ static struct menu_entry fs_menu_look[] = {
         .priv = &film_sim_strength,
         .max = 100,
         .help = "How much of the stock's look is applied.",
+    },
+    {
+        .name = "Grade Quality",
+        .priv = &film_sim_gradeq,
+        .max = 2,
+        .select = fs_gradeq_select,
+        .update = fs_gradeq_update,
+        .help = "How much of the look is graded into the shot, and therefore "
+                "how long the next frame waits. High is the full look. Normal "
+                "drops the per-hue work (greens no longer behave differently "
+                "from reds) for about a fifth less time. Fast applies the tone "
+                "curve only and leaves colour untouched -- 5x less time, no "
+                "colour shift at all. Develop always uses the full look.",
     },
     {
         .name = "Saturation",
@@ -8312,9 +8363,13 @@ static void fs_yuv_poll_task(void *unused) {
 
 static unsigned int film_sim_init() {
   fs_log("film_sim_init: module loaded (enable=%d preset=%d strength=%d "
-         "grain=%d fps=%d user1=%d)",
+         "grain=%d fps=%d user1=%d gradeq=%d)",
          film_sim_enable, film_sim_preset, film_sim_strength, film_sim_grain,
-         film_sim_fps, film_sim_user1);
+         film_sim_fps, film_sim_user1, film_sim_gradeq);
+  /* The config is read before the first bake, so the shot path runs at the
+   * quality the card asked for rather than the default until somebody opens
+   * the menu. */
+  fs_yuvlook_set_quality(film_sim_gradeq);
   /* Write the boot line immediately.
    *
    * fs_log() only fills a RAM ring buffer; the first flush used to happen

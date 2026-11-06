@@ -48,6 +48,9 @@ look engine. Thank you.
   pushed to the camera and read back.
 * **Develop on the camera**: current photo, a marked set, a 4-up comparison, or
   automatic — with the look that was chosen at the shutter.
+* **Grade Quality** — High / Normal / Fast for the in-shutter grade, because
+  that grade sits in Canon's pipeline and the next frame waits for it. High is
+  the full look; Fast applies the tone curve only and costs a fifth of the time.
 * **The same look in LiveView** while you compose.
 
 ## The film shelf

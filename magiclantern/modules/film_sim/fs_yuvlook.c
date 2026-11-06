@@ -253,6 +253,22 @@ const se_yuv3 *fs_yuvlook_uv3(void) { return baked ? &tbl3 : NULL; }
  * allocation: this runs inside the shot, before Canon's encoder reads the
  * buffer. `stride` is in bytes and must be at least width*2.
  */
+/*
+ * How much of the look the shot path applies. One core, ~1 s per frame at the
+ * full grade, and the grade sits in Canon's pipeline, so the shutter waits for
+ * it -- this is the dial for that.
+ *
+ *   0 HIGH   luma curve + per-hue chroma cells + chroma matrix   (the look)
+ *   1 NORMAL luma curve + one global chroma gain + matrix        (no per-hue)
+ *   2 FAST   luma curve only, chroma untouched                   (tone only)
+ *
+ * The bake is the same in all three: the cells are computed and then ignored,
+ * so switching costs nothing but a rebake that is already done.
+ */
+static int gradeq;
+void fs_yuvlook_set_quality(int q) { gradeq = q < 0 ? 0 : (q > 2 ? 2 : q); }
+int  fs_yuvlook_quality(void) { return gradeq; }
+
 uint32_t fs_yuvlook_apply(unsigned char *buf, int width, int height, int stride)
 {
 #ifndef SE_HOSTED
@@ -291,24 +307,37 @@ uint32_t fs_yuvlook_apply(unsigned char *buf, int width, int height, int stride)
              * each axis (4-level quantisation) and the lookup is a shift
              * again, so the shot path is as cheap as it was.
              */
-            int uu = (u + 128 < 0) ? 0 : (u + 128 > 255 ? 255 : u + 128);
-            int vv = (v + 128 < 0) ? 0 : (v + 128 > 255 ? 255 : v + 128);
-            int cell = (vv >> 2) * SE_YUV_GRID + (uu >> 2);
             int g    = tbl.gain[yav];
-            int cg   = tbl.cg[cell];
-            int dy   = tbl.dy[cell];
-            int cgg  = cg * g;
-            int ru   = (tbl.matrix[0] * u + tbl.matrix[1] * v) >> 8;
-            int rv   = (tbl.matrix[2] * u + tbl.matrix[3] * v) >> 8;
-            int nu   = tbl.uoff[yav] + ((ru * cgg) >> 12);
-            int nv   = tbl.voff[yav] + ((rv * cgg) >> 12);
-            int ny0  = tbl.y[y0] + dy;
-            int ny1  = tbl.y[y1] + dy;
+            int cg   = 64, dy = 0;      /* 64 = unity in Q6 */
 
-            p[0] = (unsigned char)(signed char)(nu < -128 ? -128 : nu > 127 ? 127 : nu);
-            p[2] = (unsigned char)(signed char)(nv < -128 ? -128 : nv > 127 ? 127 : nv);
-            p[1] = (unsigned char)(ny0 < 0 ? 0 : ny0 > 255 ? 255 : ny0);
-            p[3] = (unsigned char)(ny1 < 0 ? 0 : ny1 > 255 ? 255 : ny1);
+            if (gradeq < 2) {
+                if (gradeq == 0) {
+                    int uu = (u + 128 < 0) ? 0 : (u + 128 > 255 ? 255 : u + 128);
+                    int vv = (v + 128 < 0) ? 0 : (v + 128 > 255 ? 255 : v + 128);
+                    int cell = (vv >> 2) * SE_YUV_GRID + (uu >> 2);
+                    cg = tbl.cg[cell];
+                    dy = tbl.dy[cell];
+                }
+                /* NORMAL keeps the luma gain and the matrix, drops the cells. */
+                int cgg  = cg * g;
+                int ru   = (tbl.matrix[0] * u + tbl.matrix[1] * v) >> 8;
+                int rv   = (tbl.matrix[2] * u + tbl.matrix[3] * v) >> 8;
+                int nu   = tbl.uoff[yav] + ((ru * cgg) >> 12);
+                int nv   = tbl.voff[yav] + ((rv * cgg) >> 12);
+                int ny0  = tbl.y[y0] + dy;
+                int ny1  = tbl.y[y1] + dy;
+
+                p[0] = (unsigned char)(signed char)(nu < -128 ? -128 : nu > 127 ? 127 : nu);
+                p[2] = (unsigned char)(signed char)(nv < -128 ? -128 : nv > 127 ? 127 : nv);
+                p[1] = (unsigned char)(ny0 < 0 ? 0 : ny0 > 255 ? 255 : ny0);
+                p[3] = (unsigned char)(ny1 < 0 ? 0 : ny1 > 255 ? 255 : ny1);
+            } else {
+                /* FAST: chroma bytes are left exactly as Canon wrote them. */
+                int ny0 = tbl.y[y0];
+                int ny1 = tbl.y[y1];
+                p[1] = (unsigned char)(ny0 < 0 ? 0 : ny0 > 255 ? 255 : ny0);
+                p[3] = (unsigned char)(ny1 < 0 ? 0 : ny1 > 255 ? 255 : ny1);
+            }
         }
     }
 #ifdef SE_HOSTED

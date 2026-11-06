@@ -16,6 +16,11 @@ void fs_yuvlook_set_satboost(int s);
 int  fs_yuvlook_bake_lut(const char *stock_path, int strength,
                          const char *lut_path);
 
+/* How much of the look the shot path applies: 0 high, 1 normal, 2 fast.
+ * See the comment on the definition for what each one drops. */
+void fs_yuvlook_set_quality(int q);
+int  fs_yuvlook_quality(void);
+
 int  fs_yuvlook_ready(void);
 const char *fs_yuvlook_name(void);
 
