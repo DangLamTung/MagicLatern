@@ -12,3 +12,6 @@ film_eval/
 .DS_Store
 *.swp
 /tmp/
+
+# Release artefacts (ci/release-build.sh writes these)
+dist/

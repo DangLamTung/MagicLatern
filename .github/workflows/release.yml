@@ -1,0 +1,60 @@
+# Release CD: tag -> firmware artefacts.
+#
+# This lives in the root repo because build.sh, the toolchain checkout and the
+# magiclantern/ tree all live here; magiclantern/ itself is a separate repo with
+# its own CI (host tests + romfind unit tests) and is cloned in below.
+#
+# Every step is in ci/release-build.sh, so a failed run here can be reproduced
+# on a Mac with `./ci/release-build.sh` instead of guessed at.
+#
+#   git tag v1.2.0 && git push --tags      -> builds, tests, publishes a release
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v1.2.0); empty means build only'
+        required: false
+      module_ref:
+        description: 'MagicLatern-ML branch, tag or sha to build'
+        required: false
+        default: dev
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # arm64 mac image: build.sh needs Darwin, sysctl and BSD stat
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, test and package
+        env:
+          DOWNLOAD_TOOLCHAIN: '1'
+          MODULE_REF: ${{ github.event.inputs.module_ref || 'dev' }}
+        run: ./ci/release-build.sh
+
+      - name: Upload the artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: magiclantern-6D.116
+          path: dist/
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "Built from MagicLatern-ML \`${{ github.event.inputs.module_ref || 'dev' }}\`. Host tests passed; see hosttests.log in the assets."

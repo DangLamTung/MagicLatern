@@ -12,17 +12,19 @@
 set -eu
 
 ROOT=$(cd "$(dirname "$0")" && pwd)
-TC="$ROOT/toolchain/arm-gnu-toolchain-13.3.rel1-darwin-arm64-arm-none-eabi/bin"
+# Found rather than named: GitHub's macOS runners are arm64 or x86_64 depending
+# on the image, and each needs its own toolchain build.
+TC=$(ls -d "$ROOT"/toolchain/arm-gnu-toolchain-*/bin 2>/dev/null | head -1)
 VENV="$ROOT/toolchain/venv/bin"
 SRC="$ROOT/magiclantern"
 
 CAM=${1:-6D.116}
 MODE=${2:-}
 
-if [ ! -x "$TC/arm-none-eabi-gcc" ]; then
-    echo "ARM toolchain not found in $TC" >&2
-    echo "Download arm-gnu-toolchain-13.3.rel1-darwin-arm64-arm-none-eabi.tar.xz" >&2
-    echo "and extract it into $ROOT/toolchain" >&2
+if [ -z "$TC" ] || [ ! -x "$TC/arm-none-eabi-gcc" ]; then
+    echo "ARM toolchain not found under $ROOT/toolchain" >&2
+    echo "Download arm-gnu-toolchain-13.3.rel1-darwin-{arm64,x86_64}-arm-none-eabi.tar.xz" >&2
+    echo "(whichever matches uname -m) and extract it into $ROOT/toolchain" >&2
     exit 1
 fi
 

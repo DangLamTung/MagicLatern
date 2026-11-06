@@ -170,15 +170,19 @@ run as evidence unless the card shows the files afterwards.
 
 * `gui/fsg.c` draws both screens through exactly two primitives (`fsg_fill`,
   `fsg_text`). `gui/fsg_ml.c` implements them with `bmp_*` on the camera;
-  `tools/gui_preview/fsg_host.c` implements them into an RGB buffer so the same
+  `gui/fsg_host.c` implements them into an RGB buffer so the same
   code can be rendered on a Mac. `gui/fsg_dat.c` is shared too: it parses the
   canister artwork through `fsg_file_*()`, which each backend supplies (FIO vs
   stdio), so the preview reads the very same `ML/data/FILMCAN.DAT`.
 * **The camera palette is 8-bit indices, not RGB.** Only the constants in
   `gui/fsg.h` may be drawn; each one has an exact `ml_color()` mapping. No
   gradients, no blends, no per-stock colours -- those cannot exist on the panel.
+* The host backend lives in the module (`gui/fsg_host.c`), not in the parent
+  repo's `tools/gui_preview/`, because `se/hosttest` builds `creatorwrite`
+  from it and a standalone clone of the module repo has no parent.
 * Preview: `gcc -O1 -Imagiclantern/modules/film_sim tools/gui_preview/preview.c
-  tools/gui_preview/fsg_host.c magiclantern/modules/film_sim/gui/fsg.c
+  magiclantern/modules/film_sim/gui/fsg_host.c
+  magiclantern/modules/film_sim/gui/fsg.c
   magiclantern/modules/film_sim/gui/fsg_dat.c -o /tmp/fsg_preview &&
   /tmp/fsg_preview <path to FILMCAN.DAT> && python3 tools/gui_preview/render.py`
   writes `/tmp/fsg_*.png`. Run it with no argument to preview the no-artwork
