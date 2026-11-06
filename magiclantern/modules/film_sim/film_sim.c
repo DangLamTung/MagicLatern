@@ -7474,6 +7474,33 @@ static MENU_UPDATE_FUNC(fs_auto_update) {
                 "film version with no keypress. Off: develop only when asked.");
 }
 
+static MENU_UPDATE_FUNC(fs_queue_update) {
+  static char buf[40];
+  if (film_sim_queue && fs_queue_n > 0)
+    snprintf(buf, sizeof buf, "On, %d queued", (int)fs_queue_n);
+  else
+    snprintf(buf, sizeof buf, "%s", film_sim_queue ? "On" : "Off");
+  MENU_SET_VALUE("%s", buf);
+  MENU_SET_ICON(film_sim_queue ? MNI_ON : MNI_OFF, 0);
+  MENU_SET_HELP("On: the develop runs without taking the screen -- no "
+                "UILOCK_SHUTTER, so the shutter stays live -- and a worker "
+                "drains the queue behind you. The JPEG on the card is Canon's "
+                "until the queue reaches that frame. Off: the develop owns the "
+                "panel for its whole run.");
+}
+
+static MENU_SELECT_FUNC(fs_queue_toggle) {
+  menu_numeric_toggle(&film_sim_queue, delta, 0, 1);
+  if (film_sim_queue)
+    fs_queue_start();
+  /* Turning it off does not kill a running develop; the worker's loop sees the
+   * flag and stops after the frame in hand, which is the only frame that could
+   * be left half-written. */
+  fs_log("queue: %s (auto %s)", film_sim_queue ? "on" : "off",
+         film_sim_auto ? "on" : "off");
+  fs_log_flush();
+}
+
 static MENU_SELECT_FUNC(fs_auto_toggle) {
   menu_numeric_toggle(&film_sim_auto, delta, 0, 1);
   if (film_sim_auto && !fs_auto_running)
@@ -7540,6 +7567,20 @@ static struct menu_entry fs_menu_develop[] = {
         .update = fs_auto_update,
         .help = "Develop by itself after each shot and when level 2/3 is "
                 "picked.",
+    },
+    {
+        /* film.sim.queue used to be reachable only as a config variable, which
+         * meant the only documented way to get a non-blocking develop was to
+         * know the variable's name. It is the difference between the shutter
+         * being locked for the length of a develop and not. */
+        .name = "Background Develop",
+        .priv = &film_sim_queue,
+        .max = 1,
+        .select = fs_queue_toggle,
+        .update = fs_queue_update,
+        .help = "On: a develop never takes the screen, so the shutter keeps "
+                "working and queued frames are developed behind you. Off: the "
+                "develop owns the panel until it finishes.",
     },
     {
         .name = "Comparison x4",
