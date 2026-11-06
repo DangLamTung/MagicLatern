@@ -51,15 +51,17 @@ per tick, drawn by the camera's own strip drawer:
 
 ## The screens
 
-Every screen in this README is drawn by the module's own drawing code
+Every camera screen in this README is drawn by the module's own drawing code
 ([`gui/fsg.c`](magiclantern/modules/film_sim/gui/fsg.c),
 [`fsg_creator.c`](magiclantern/modules/film_sim/gui/fsg_creator.c),
 [`fsg_wb.c`](magiclantern/modules/film_sim/gui/fsg_wb.c)) on the desktop, through
 the same two primitives the camera uses: `fsg_fill` and `fsg_text`, implemented
 with `bmp_*` on the panel and into an RGB buffer on a Mac. There is no mockup
 layer, so a row in the wrong place here is a row in the wrong place on the LCD.
-The palette is eight-bit indices — 48 fills for the wheel alone — because that is
-what the panel has:
+The one thing that is not the camera's is the glyphs — the preview sets the text
+in Arial, so a line can be a few pixels wider than ML's font box; positions,
+colours and every fill are the panel's. The palette is eight-bit indices — 48
+fills for the wheel alone — because that is what the panel has:
 
 ```sh
 # the shelf and the darkroom
