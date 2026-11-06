@@ -33,7 +33,10 @@ DIST="$ROOT/dist"
 say() { printf '\n== %s\n' "$*"; }
 
 # ---------------------------------------------------------------- toolchain
-if [ ! -x "toolchain/$TOOLCHAIN_DIR/bin/arm-none-eabi-gcc" ]; then
+# Globbed, like build.sh, so a different toolchain version or a tree that was
+# extracted by hand still counts.
+TCG=$(ls -d toolchain/arm-gnu-toolchain-*/bin/arm-none-eabi-gcc 2>/dev/null | head -1)
+if [ -z "$TCG" ]; then
     if [ "${DOWNLOAD_TOOLCHAIN:-0}" != "1" ]; then
         echo "no ARM toolchain in toolchain/$TOOLCHAIN_DIR" >&2
         echo "re-run with DOWNLOAD_TOOLCHAIN=1, or extract it there yourself" >&2
@@ -45,7 +48,7 @@ if [ ! -x "toolchain/$TOOLCHAIN_DIR/bin/arm-none-eabi-gcc" ]; then
     tar -xJf "/tmp/$TOOLCHAIN_DIR.tar.xz" -C toolchain
     rm -f "/tmp/$TOOLCHAIN_DIR.tar.xz"
 fi
-say "toolchain: $(toolchain/$TOOLCHAIN_DIR/bin/arm-none-eabi-gcc -dumpversion)"
+say "toolchain: $("$TCG" -dumpversion) ($TCG)"
 
 # ---------------------------------------------------------------------- venv
 # build.sh refuses to run without docutils (it makes the user guide).
@@ -62,6 +65,11 @@ if [ ! -d magiclantern/.git ] && [ ! -f magiclantern/Makefile.globals ]; then
     rm -rf magiclantern
     git clone -q "$MODULE_REPO" magiclantern
     git -C magiclantern checkout -q "$MODULE_REF"
+else
+    # Say it out loud: on a Mac the tree is usually already there, and
+    # MODULE_REF then means nothing. A release that claims to be from a ref it
+    # did not build is worse than one that says it used what was on disk.
+    say "using the existing magiclantern/ tree; MODULE_REF=$MODULE_REF is ignored"
 fi
 say "module tree: $(git -C magiclantern rev-parse --short HEAD 2>/dev/null || echo 'not a git checkout')"
 
@@ -106,7 +114,10 @@ done
 # The zip must contain the module the tests just covered, not a stale copy.
 say "verify the zip carries the built module"
 rm -rf /tmp/fs_zipcheck && mkdir -p /tmp/fs_zipcheck
-unzip -qo "$ZIP" ML/modules/film_sim.mo -d /tmp/fs_zipcheck
+unzip -qo "$ZIP" ML/modules/film_sim.mo -d /tmp/fs_zipcheck || {
+    echo "the zip does not contain ML/modules/film_sim.mo - is film_sim still in"
+    echo "platform/$CAM/modules.included?" >&2
+    exit 1; }
 same=$(cmp -s /tmp/fs_zipcheck/ML/modules/film_sim.mo "$MOD" && echo yes || echo no)
 [ "$same" = yes ] || { echo "the zip holds a different film_sim.mo than the build" >&2; exit 1; }
 
@@ -114,8 +125,14 @@ rm -rf "$DIST" && mkdir -p "$DIST"
 cp "$ZIP" "$DIST/magiclantern-$CAM.zip"
 cp "$BIN" "$DIST/autoexec-$CAM.bin"
 cp "$MOD" "$DIST/film_sim-$CAM.mo"
-[ -f "magiclantern/modules/mlwifi/build/mlwifi.mo" ] && \
-    cp "magiclantern/modules/mlwifi/build/mlwifi.mo" "$DIST/mlwifi-$CAM.mo" || true
+# mlwifi is not in modules.included, so it is not in the zip; it ships as its
+# own asset. A failed copy must not be swallowed - that is how a release ends up
+# missing a file the notes promise.
+if [ -f "magiclantern/modules/mlwifi/build/mlwifi.mo" ]; then
+    cp "magiclantern/modules/mlwifi/build/mlwifi.mo" "$DIST/mlwifi-$CAM.mo"
+else
+    echo "warning: mlwifi.mo was not built; the release notes will not list it" >&2
+fi
 cp /tmp/fs_hosttests.log "$DIST/hosttests.log"
 
 cat > "$DIST/RELEASE-NOTES.md" <<NOTES
