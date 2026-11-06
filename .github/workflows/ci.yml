@@ -1,0 +1,70 @@
+# CI for the project.
+#
+# Three jobs, because they fail for different reasons and one must never mask
+# the other:
+#
+#   host-tests   compiles the module's engine and host harnesses with the system
+#                compiler and runs them. No camera, no ARM toolchain, seconds.
+#                This is the gate: it covers the look engine, the recipe
+#                writers and the neutral-ramp bound.
+#   romfind      unit tests for the ROM analysis tool on synthetic images.
+#   screens      compiles the desktop renderers that every screenshot in the
+#                README comes from, and checks the shelf's band invariant.
+#
+# The ARM build is NOT here on purpose: build.sh expects the bundled toolchain
+# under toolchain/ and Canon's firmware layout, and a red CI that fails for
+# environment reasons teaches people to ignore CI. It is run locally with
+# ./build.sh 6D.116 and the result is checked against the card.
+
+name: ci
+
+on:
+  push:
+    branches: [main, dev, master]
+  pull_request:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run every host test
+        working-directory: magiclantern/modules/film_sim/se/hosttest
+        run: ./run_tests.sh
+
+  romfind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests for the ROM analysis tool
+        working-directory: magiclantern/modules/film_sim/tools/romfind
+        run: ./selftest.py
+
+  # The screens are documentation: README images are rendered from this code, so
+  # a drawing change that stops it compiling silently rots every picture in the
+  # repo. This builds both preview tools and runs the shelf one -- it prints
+  # BAND CHECK PASS only if drawing the strip band alone gives the same pixels as
+  # drawing the whole screen.
+  screens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the screen preview tools
+        run: |
+          set -e
+          M=magiclantern/modules/film_sim
+          gcc -O1 -Wall -I$M $M/tools/gui_preview/preview.c \
+              $M/gui/fsg.c $M/gui/fsg_host.c $M/gui/fsg_dat.c \
+              -o /tmp/fsg_preview -lm
+          gcc -O1 -Wall -I$M $M/tools/gui_preview/creator_preview.c \
+              $M/gui/fsg.c $M/gui/fsg_host.c $M/gui/fsg_dat.c \
+              $M/gui/fsg_creator.c $M/gui/fsg_wb.c -o /tmp/fsg_creator -lm
+      - name: Draw every screen
+        run: |
+          set -e
+          /tmp/fsg_preview
+          /tmp/fsg_creator edited
+          /tmp/fsg_preview 2>&1 | grep -q "BAND CHECK PASS"
+          ls /tmp/fsg_anim*.ppm | wc -l
+          ls /tmp/fsg_spin*.ppm | wc -l

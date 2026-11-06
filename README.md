@@ -97,10 +97,16 @@ Twelve wedges, not six axes: each one carries **saturation** (0–200 %), **hue
 rotation** (±180°) and **luminance** (0–200 %), so a wedge can be lifted without
 moving its neighbour. The needle marks the wedge under edit and the ring runs
 through every wedge's current value, which is why a saved look reads as one
-shape rather than as a list of numbers. The fill is 12 wedges × 4 radial bands =
-48 palette entries — the panel is eight-bit indices, so a gradient has to be
-dithered by hand — and a full repaint of this screen costs 0.74 ms on a Mac,
-which is why the camera only redraws the wheel when a value moves.
+shape rather than as a list of numbers. A key press moves the target and the
+ring springs to it on a 30 ms clock — the panel's numbers change at once, the
+wheel catches up:
+
+![The wheel turning as the selection moves to wedge 5, 18 frames of the camera's own spring](docs/img/creator_spin.gif)
+
+The fill is 12 wedges × 4 radial bands = 48 palette entries — the panel is
+eight-bit indices, so a gradient has to be dithered by hand — and a full repaint
+of this screen costs 0.74 ms on a Mac, which is why the camera only redraws the
+wheel when a value moves.
 
 A saved wheel is a **complete recipe, not a delta** — `fs_creator_write()` emits
 its own curve, twelve `HUE_SAT`, twelve `HUE_ROT` and twelve `HUE_LUM` values,
@@ -584,3 +590,16 @@ python3 magiclantern/modules/film_sim/tools/mfilm_import.py --all-missing --out 
 — the spring-driven shelf animation, the palette-ramp renderer, the synthetic
 RAW fixture generator, the qemu instruction profiler, and their measured 6D
 boot reservation of 848 KB against our 592 KB.
+
+## Licence
+
+GPL v2, the same licence Magic Lantern itself ships under — see
+[LICENSE](LICENSE), which is a byte-identical copy of the `COPYING` file in
+[`magiclantern/`](magiclantern/COPYING). The module links against ML's own code,
+so it cannot carry a different licence than the thing it is built into.
+
+Two things in the tree are other people's work, and this file is not a claim
+about their terms: the canister artwork parsed from `ML/data/FILMCAN.DAT` and the
+recipes derived from M-Film (both come from the FilmRoll project — see
+[`docs/m-film.md`](docs/m-film.md)). Everything else under `magiclantern/` is
+Magic Lantern upstream, including the prebuilt `src/libs/*.a` archives.

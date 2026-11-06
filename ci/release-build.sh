@@ -6,9 +6,12 @@
 #   DOWNLOAD_TOOLCHAIN=1 ./ci/release-build.sh # fetch it first (CI)
 #
 # env:
-#   MODULE_REPO  where the module tree comes from (default: this repo's own
-#                GitHub module repo)
-#   MODULE_REF   branch, tag or sha to build (default: dev)
+#   DOWNLOAD_TOOLCHAIN=1 fetches the ARM compiler; otherwise toolchain/ must
+#   already hold one.
+#
+# The module tree lives in THIS repository under magiclantern/ -- it used to be
+# a second repo (MagicLatern-ML) that a release cloned, which meant a release
+# could build a commit nobody had tested. There is nothing to clone now.
 #
 # The point of doing it in a script rather than inline in the workflow is that
 # the same steps run on a Mac, so a red release job can be reproduced locally
@@ -18,8 +21,6 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-MODULE_REPO=${MODULE_REPO:-https://github.com/DangLamTung/MagicLatern-ML.git}
-MODULE_REF=${MODULE_REF:-dev}
 # GitHub's macOS runners are arm64 or x86_64 depending on the image.
 case $(uname -m) in
   arm64|aarch64) TC_ARCH=darwin-arm64 ;;
@@ -60,18 +61,13 @@ if [ ! -x toolchain/venv/bin/rst2html ]; then
 fi
 
 # -------------------------------------------------------------------- module
-if [ ! -d magiclantern/.git ] && [ ! -f magiclantern/Makefile.globals ]; then
-    say "cloning $MODULE_REF from $MODULE_REPO"
-    rm -rf magiclantern
-    git clone -q "$MODULE_REPO" magiclantern
-    git -C magiclantern checkout -q "$MODULE_REF"
-else
-    # Say it out loud: on a Mac the tree is usually already there, and
-    # MODULE_REF then means nothing. A release that claims to be from a ref it
-    # did not build is worse than one that says it used what was on disk.
-    say "using the existing magiclantern/ tree; MODULE_REF=$MODULE_REF is ignored"
+# One repository: magiclantern/ is tracked at the same commit as this script,
+# so what is built is what was tagged.
+if [ ! -f magiclantern/Makefile.globals ]; then
+    echo "error: magiclantern/ is missing; it is tracked in this repo, not cloned" >&2
+    exit 1
 fi
-say "module tree: $(git -C magiclantern rev-parse --short HEAD 2>/dev/null || echo 'not a git checkout')"
+say "module tree: this checkout, $(git rev-parse --short HEAD 2>/dev/null || echo 'not a git checkout')"
 
 # --------------------------------------------------------------------- tests
 # A release that was never tested is not a release. The host tests cover the
@@ -136,9 +132,10 @@ fi
 cp /tmp/fs_hosttests.log "$DIST/hosttests.log"
 
 cat > "$DIST/RELEASE-NOTES.md" <<NOTES
-Built from MagicLatern-ML \`$(git -C magiclantern rev-parse --short HEAD 2>/dev/null || echo unknown)\`
-($MODULE_REF). The host tests and the ROM-tool unit tests passed before anything
-was packaged; the log is in \`hosttests.log\`.
+Built from commit \`$(git rev-parse --short HEAD 2>/dev/null || echo unknown)\` of this
+repository -- the module tree and the build script are the same commit. The host
+tests and the ROM-tool unit tests passed before anything was packaged; the log is
+in \`hosttests.log\`.
 
 | asset | what it is |
 |---|---|

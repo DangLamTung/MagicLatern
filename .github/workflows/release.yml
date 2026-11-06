@@ -1,8 +1,7 @@
 # Release CD: tag -> firmware artefacts.
 #
-# This lives in the root repo because build.sh, the toolchain checkout and the
-# magiclantern/ tree all live here; magiclantern/ itself is a separate repo with
-# its own CI (host tests + romfind unit tests) and is cloned in below.
+# One repository: build.sh, the toolchain checkout and the magiclantern/ tree
+# all live here, and the module's host tests run from this same tree (see ci.yml).
 #
 # Every step is in ci/release-build.sh, so a failed run here can be reproduced
 # on a Mac with `./ci/release-build.sh` instead of guessed at.
@@ -19,10 +18,6 @@ on:
       tag:
         description: 'Tag to publish (e.g. v1.2.0); empty means build only'
         required: false
-      module_ref:
-        description: 'MagicLatern-ML branch, tag or sha to build'
-        required: false
-        default: dev
 
 permissions:
   contents: write
@@ -41,7 +36,6 @@ jobs:
       - name: Build, test and package
         env:
           DOWNLOAD_TOOLCHAIN: '1'
-          MODULE_REF: ${{ github.event.inputs.module_ref || 'dev' }}
         run: ./ci/release-build.sh
 
       - name: Upload the artefacts

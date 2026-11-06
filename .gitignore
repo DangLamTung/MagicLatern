@@ -1,7 +1,13 @@
-# Large or generated trees. magiclantern/ and tools/soup-engine/ are their own
-# git repositories; toolchain/ is the ARM compiler; qemu/ holds multi-GB disk
-# images; film_eval/ is rendered evidence (regenerate with tools/gui_preview).
-magiclantern/
+# Large or generated trees. toolchain/ is the ARM compiler; qemu/ holds multi-GB
+# disk images; film_eval/ is rendered evidence (regenerate with
+# magiclantern/modules/film_sim/tools/gui_preview).
+#
+# magiclantern/ is NOT ignored: it used to be a second git repository of its
+# own (MagicLatern-ML on GitHub), which meant the module and the thing that
+# builds it lived in two histories and a release had to clone one from the
+# other. It is tracked here now, one repo, and nested .gitignore files inside
+# the tree still apply -- magiclantern/.gitignore covers ML's own *.bin/*.o,
+# and modules/film_sim/.gitignore covers the host-test binaries.
 tools/
 toolchain/
 qemu/
@@ -15,3 +21,10 @@ film_eval/
 
 # Release artefacts (ci/release-build.sh writes these)
 dist/
+
+# Third-party downloads kept locally for reference, not ours to redistribute:
+# a commercial app installer and Fujifilm's own LUT package. They are on this
+# disk, they are not part of the project.
+DehancerDesktop_Installer*
+gfx100II-*
+gfx100ii_luts/
