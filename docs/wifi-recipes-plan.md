@@ -140,3 +140,37 @@ strings to anchor on. That is a project, not a task, and a wrong address in
 
 `fs_film_watch_task()` makes any `.fs` that reaches `ML/FILM` live without a
 reboot, so recipe push already works for any transport that can write the card.
+
+### The real blocker, found by asking "surely there is WiFi material?"
+
+There is a great deal of it. ROM1 holds, among others:
+
+```
+0x261855  NWCOM] TransmissionChangeCBR(0x%x)
+0x261879  NWCOM] NWCOM Init
+0x261924  Wlan Init Err
+0x262ca2  WLAN Biltin Judge (0x%x)
+0x268454  WLAN module SDIO ERROR!
+0x0e26f8  WFT (%#x <= %#x)
+0x0facf2  WFT 0x%x INNER 0x%x
+0x43840e  NWCommu/NWCommuTransOrder.c
+0xccf0c5  NwTransferOrder          (an entry in the 386-name table)
+```
+
+Not one of them has a single pointer to it. Checked as an exact word, with a
+-8..+64 tolerance, under four candidate bases (`0xFF000000`, `0xF8000000`,
+`0xFF0C0000`, `0xF80C0000`) and three RAM bases (`0x40000000`/`0x41000000`/
+`0x42000000` plus the string offset): **zero matches everywhere**.
+
+So this firmware does not reach its log strings by literal or by `ADR`. Canon's
+logging goes through a message-table macro with a base register, which leaves no
+address in the image to find. That is why every string-anchored search in this
+session returned nothing, `halt all sockets` included -- not because the code is
+absent, but because the anchor does not exist.
+
+### Where the code is, for a Ghidra session
+
+The WiFi module's data is contiguous at file `0x26xxxx` (x10 the range
+`0xFF200000`-`0xFF270000` under the alias base). Its code is the region
+immediately before that. A Ghidra project on ROM1 at `0xFF000000`, starting in
+`0xFF1E0000`-`0xFF270000`, is the shortest route that does not depend on strings.
