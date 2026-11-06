@@ -969,7 +969,14 @@ int fs_creator_write(const fs_creator_t *c, char *buf, int cap, const char *name
             len += snprintf(vec + len, sizeof vec - (size_t)len, "%s%d",
                             i ? "," : "", v);
         }
-        PUT("%-9s %s\n", key, vec);
+        /* A plain "%s %s", not a left-justified width: ML's vsnprintf has no
+         * '-' flag and writes it literally, so the file came out as
+         * "-9s 80,100,...". The parser
+         * does not know a key called "-9s", so it dropped all three hue lines
+         * and the saved look kept only its curve. HUE_SAT, HUE_ROT and
+         * HUE_LUM are all seven characters, which is what the padding was
+         * for. */
+        PUT("%s %s\n", key, vec);
     }
 
     /* Nothing forced: what the FX screen says, and only that. GRAIN 8 and

@@ -10,8 +10,8 @@ cd "$(dirname "$0")" || exit 1
 
 if [ "${1:-}" != "--no-build" ]; then
     make -s all >/dev/null 2>&1 || { echo "BUILD FAILED"; make -s all; exit 1; }
-    make -s tableerr creatorwrite fujiwrite rampchk >/dev/null 2>&1 || {
-        echo "BUILD FAILED (extra tests)"; make tableerr creatorwrite fujiwrite rampchk
+    make -s tableerr creatorwrite creatorwrite_ml fujiwrite rampchk >/dev/null 2>&1 || {
+        echo "BUILD FAILED (extra tests)"; make tableerr creatorwrite creatorwrite_ml fujiwrite rampchk
         exit 1; }
 fi
 
@@ -29,6 +29,13 @@ check() {   # check <name> <command...>
 }
 
 check creatorwrite ./creatorwrite
+
+# The same writer test, with every snprintf answered by a stand-in for the
+# camera's formatter (se/hosttest/mlprintf.c). macOS printf is correct, so the
+# line above passes while the camera writes ".8s.fs" or "-9s 80,100,..."; this
+# one fails here instead. Verified by putting each bug back.
+check creatorwrite_ml ./creatorwrite_ml
+
 check fujiwrite    ./fujiwrite
 
 # rampchk has no PASS line: it is a measurement, so assert its bound instead.
@@ -48,17 +55,20 @@ if [ -x ./tableerr ]; then
     fi
 fi
 
-# The camera's vsnprintf has no precision support: "ML/FILM/%.8s.fs" reached a
+# The camera's vsnprintf has no precision support and no '-' flag: "ML/FILM/%.8s.fs" reached a
 # real card as ".8s.fs", and "ML/FILMS/90_%.8s.xml" held <code>%.11s</code>
 # inside it. Width and zero fill are fine -- FILMSIM.LOG's "%08x" addresses
 # print correctly. Checked here because no host compiler will ever catch it:
 # macOS printf implements the format properly, so every host test passes while
-# the camera writes a file called ".8s.fs".
-bad=$(grep -rnE '%\.[0-9]+' \
+# the camera writes a file called ".8s.fs". The same gap wrote "-9s" where a
+# recipe's HUE_SAT key belonged, and the parser ignored all three hue lines --
+# the creator's own test round-trips through macOS printf, which is correct, so
+# it passed while the camera threw the colour away.
+bad=$(grep -rnE '%\.[0-9]+|%-' \
         ../../film_sim.c ../../fs_yuvhook.c ../../fs_yuvlook.c \
         ../../gui/*.c ../../se/*.c ../../se/engine/*.c 2>/dev/null | grep -v '^Binary')
 if [ -z "$bad" ]; then
-    echo "ok   fmtchk (no %.Ns precision specifiers in firmware sources)"
+    echo "ok   fmtchk (no precision or left-justify specifiers in firmware sources)"
 else
     echo "FAIL fmtchk (the camera's vsnprintf prints these literally)"
     echo "$bad" | head -5

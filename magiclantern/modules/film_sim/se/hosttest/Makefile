@@ -69,6 +69,15 @@ creatorwrite: creatorwrite.c ../../gui/fsg_creator.c ../../gui/fsg_host.c \
               $(SE_DIR)/se_libgcc.c $(ENG_SRC) stubs.c
 	$(CC) -I../../.. $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
 
+# The same test, but every snprintf goes through a stand-in for the camera's
+# formatter: no precision, no '-' flag, both printed literally. macOS printf is
+# correct, so the plain build above passes while the camera writes ".8s.fs" or
+# "-9s 80,100,...". This build is the one that would have caught all three.
+creatorwrite_ml: creatorwrite.c ../../gui/fsg_creator.c ../../gui/fsg_host.c \
+                 $(SE_DIR)/se_libgcc.c $(ENG_SRC) stubs.c mlprintf.c
+	$(CC) -I../../.. -D_FORTIFY_SOURCE=0 \
+	      $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
+
 lv3d: lv3d.c $(SE_DIR)/se_libgcc.c $(SE_DIR)/../fs_yuvlook.c $(ENG_SRC) stubs.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
 

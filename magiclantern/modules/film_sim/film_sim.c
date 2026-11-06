@@ -448,6 +448,31 @@ static void fs_log_flush(void) {
 }
 
 /*
+ * The engine's diagnostics, sent to FILMSIM.LOG.
+ *
+ * se_log() is set per operation, and the bake never set it: when a recipe
+ * carried keys the parser did not recognise, it said so to nobody. That is how
+ * "-9s" lines from the creator's own writer went unseen -- the look baked with
+ * no hue work at all and the log was silent.
+ */
+static void fs_engine_log(void *ctx, const char *msg) {
+  (void)ctx;
+  fs_log("engine: %s", msg);
+}
+
+static int fs_bake_stock(const char *path, int strength, const char *lut) {
+  int rc;
+  se_set_log(fs_engine_log, NULL);
+  rc = fs_yuvlook_bake_lut(path, strength, lut);
+  se_set_log(NULL, NULL);
+  if (rc != 0)
+    fs_log("bake: '%s' would not load (%s)", path, lut ? "with LUT" : "no LUT");
+  fs_log_flush();
+  return rc;
+}
+
+
+/*
  * Picture style slot probe (read-only).
  *
  * Canon keeps a per-slot "PC flavor" description, reachable over PTP as
@@ -2198,7 +2223,7 @@ static void fs_slot_backup_task(void *unused) {
       fs_yuvlook_dirty = 0;
       char stk[FS_PATH_LEN];
       if (fs_active_stock_path(stk, sizeof stk, NULL)) {
-        if (fs_yuvlook_bake_lut(stk, film_sim_strength, fs_own_lut_path()) == 0 &&
+        if (fs_bake_stock(stk, film_sim_strength, fs_own_lut_path()) == 0 &&
             fs_yuvlook_name()[0]) {
           fs_log("yuvgrade: re-baked '%s' from %s at strength %d",
                  fs_yuvlook_name(), stk, film_sim_strength);
@@ -8307,7 +8332,7 @@ static unsigned int film_sim_init() {
     }
     char stk[FS_PATH_LEN];
     if (fs_active_stock_path(stk, sizeof stk, NULL)) {
-      if (fs_yuvlook_bake_lut(stk, film_sim_strength, fs_own_lut_path()) == 0 &&
+      if (fs_bake_stock(stk, film_sim_strength, fs_own_lut_path()) == 0 &&
           fs_yuvlook_name()[0]) {
         fs_log("yuvgrade: baked '%s' from %s at strength %d",
                fs_yuvlook_name(), stk, film_sim_strength);
