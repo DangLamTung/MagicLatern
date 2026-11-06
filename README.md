@@ -1,12 +1,37 @@
-# Film Sim — Magic Lantern film stocks for the Canon EOS 6D
+# XPan Digital — Canon EOS 6D
 
-![A frame through the shipped Kodak Portra 400 recipe, framed 65:24 XPan](docs/img/hero.jpg)
+![Six frames, six film looks](docs/img/promo.jpg)
 
-A Magic Lantern module that puts a film stock's colour into the JPEG the camera
-writes, at the shutter, without developing the CR2 afterwards. 33 recipes —
-negative, slide, black and white — chosen from a film shelf on the camera's own
-screen, and applied to the full 5472×3648 frame before Canon's encoder turns it
-into a file.
+A Magic Lantern module for the EOS 6D that does two things the camera cannot do
+on its own: it writes a film look into the JPEG **at the shutter**, and it
+frames the sensor at **65:24**, the panoramic shape of a Hasselblad XPan.
+
+## What it is an imitation of
+
+The camera this is modelled on is not a Canon.
+
+**Hasselblad XPan** (and the Fujifilm TX-1 it was built beside): a 35 mm
+rangefinder that exposes **24 × 65 mm** — 2.7:1 — by using the sprocket areas
+that every other 35 mm camera throws away. That is where `Aspect ▸ 65:24 XPan`
+comes from, and why Develop writes a 5472×2020 file instead of cropping a 3:2
+one.
+
+**Fujifilm's film simulation**: a look is not a filter but a bundle of named
+settings — tone curve, colour, colour chrome, grain — saved as a recipe. That is
+what a `.fs` is here, and the Fuji recipe screen carries those fields with
+Fuji's own ranges.
+
+**OM System's colour creator**: twelve wedges around a wheel, each with its own
+saturation, hue rotation and luminance, instead of six global axes. That is the
+12-wedge creator in `Custom Look`.
+
+**Magic Lantern**, most of all: none of this exists without it. ML is the
+firmware layer that makes a retired Canon body hackable at all — the property
+API, the display filter, the task system, the file I/O on a FAT card, the
+platform headers that make `0xFF16E930` addressable. This project is a module
+bolted onto their work, it is GPL v2 because ML is, and the people who reverse
+engineered this body deserve the credit for everything below that is not the
+look engine. Thank you.
 
 ## What it does
 
@@ -137,6 +162,8 @@ means a read-back, not a message sent.
 
 ## 65:24 XPan
 
+![A 65:24 frame through the shipped Portra 400 recipe](docs/img/hero.jpg)
+
 `Aspect ▸ 65:24 XPan` frames the panel at 2.708:1 and Develop writes a real
 5472×2020 JPEG — the rows outside the window are never encoded, so the file is
 smaller and the grain is right. Capture is the honest exception: Canon decides
@@ -165,31 +192,6 @@ digitising; on an 8-bit JPEG that headroom is already gone), `CLARITY` (needs a
 graded-luma ring — designed, measured, reverted) and `HIGH ISO NR` (Canon's NR
 lives in the picture style and is not driven yet). A knob that does nothing is
 worse than an absent row.
-
-## Before and after
-
-![Canon's own ungraded JPEG at the top, the same frame through Kodak Portra 400 below, then Gold 200, Velvia 50 and Ektachrome 100](docs/img/before-after.jpg)
-
-One frame (`IMG_3211.CR2`), Canon's own Neutral JPEG first and then four stocks
-through the engine. Same pixels, four recipes: Portra 400 stays muted and warm,
-Gold 200 pushes yellow, Velvia 50 goes deep green and orange, Ektachrome 100
-stays close to the scene. Rendered by the same code the camera's Develop runs,
-on the camera's own CR2 — the recipes are the shipped `.fs` files.
-
-## Same frame, four stocks
-
-![One frame through four stocks](docs/img/stock-stack.jpg)
-
-What each stock actually does differently, measured on this frame over the whole
-picture (mean chroma spread / mean luma):
-
-| stock | chroma | luma | character |
-|---|---|---|---|
-| Canon Neutral | 34.6 | 121.6 | the reference |
-| Portra 400 | 52.1 | 140.3 | muted greens, warm skin, lifted shadows |
-| Gold 200 | 48.8 | 130.3 | yellow, nostalgic mids |
-| Velvia 50 | 55.8 | 101.6 | deep saturated greens, dark shadows |
-| Ektachrome 100 | 41.2 | 112.0 | neutral slide film, clean highlights |
 
 ## How the look gets into the file
 
@@ -321,7 +323,7 @@ module first and returns to Canon afterwards.
 | address in ROM1 | `0xFF16E930` | `0xFF3442DC` |
 | Canon function | `sssCompleteSsrawToYuv` | `sdfExecuteYuvToJpegPath` |
 | instruction word found there | `0xE92D41FC` — `push {r2-r8, lr}` | `0xE92D4FFF` — `push {r0-r12, lr}` |
-| source | [fs_yuvhook.c](/Users/tungdl/Documents/MagicLatern/magiclantern/modules/film_sim/fs_yuvhook.c:89) | [fs_yuvhook.c](/Users/tungdl/Documents/MagicLatern/magiclantern/modules/film_sim/fs_yuvhook.c:87) |
+| source | [fs_yuvhook.c](magiclantern/modules/film_sim/fs_yuvhook.c#L89) | [fs_yuvhook.c](magiclantern/modules/film_sim/fs_yuvhook.c#L87) |
 
 ```mermaid
 flowchart TD
@@ -387,7 +389,7 @@ style as built-in Neutral `0x84`, and only then can the look have come from the
 graded buffer. That measurement was taken in an earlier session; the card was
 not mounted while this section was written, so **the pairing has not been
 re-checked here**. See
-[YUV_FINDINGS.md](/Users/tungdl/Documents/MagicLatern/magiclantern/modules/film_sim/YUV_FINDINGS.md).
+[YUV_FINDINGS.md](magiclantern/modules/film_sim/YUV_FINDINGS.md).
 
 ### 4. What happens inside the hook, and what it costs
 
