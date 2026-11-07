@@ -3115,7 +3115,7 @@ static void fs_view_clear(void) {
     unsigned int *p =
         (unsigned int *)(fs_view_vram + (size_t)y * (size_t)fs_view_pitch);
     for (int i = 0; i < (fs_view_pitch >> 2); i++)
-      p[i] = 0x10801080u; /* U=128, Y=16 (black), V=128 */
+      p[i] = 0x10001000u; /* U=0, Y=16 (black), V=0 -- signed chroma, see fs_bg_blank */
   }
 }
 
@@ -3688,7 +3688,18 @@ static void fs_bg_blank(void) {
   {
     uint32_t *p = (uint32_t *)UNCACHEABLE(vr->vram);
     int words = (vr->pitch >> 2) * vr->height;
-    for (int i = 0; i < words; i++) p[i] = 0x10801080u; /* U=128 Y=16 V=128 */
+    /*
+     * Chroma 0, not 128.
+     *
+     * The palette this body reports for its own neutral entries settles the
+     * convention: pal[38]=0x3f090000 and pal[200]=0x3f370000 are black and a
+     * dark grey with U=V=0, so neutral chroma here is 0, not the offset 128 a
+     * JPEG stream uses. Filling with 128 wrote the most extreme chroma the
+     * field can hold into every pixel -- which is exactly what the camera then
+     * showed: a green screen, a few turns into a session, wherever the blanked
+     * area was visible.
+     */
+    for (int i = 0; i < words; i++) p[i] = 0x10001000u; /* U=0 Y=16 V=0 */
   }
 }
 
