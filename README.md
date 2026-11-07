@@ -100,6 +100,16 @@ smaller and the grain is right. Capture is the honest exception: Canon decides
 the dimensions of the JPEG it writes, so at the shutter the framing is burned in
 as bars (see [Limits](#limits--stated-plainly)).
 
+## Samples
+
+![Six Đà Lạt frames, each with no look, then Portra, Classic Neg, Velvia and Tri-X](samples/dalat/look-sheet.jpg)
+
+The scenes are Đà Lạt, from the author's own strip; the graded tiles are the
+module's develop output, written by the same decode → curves → hue knots →
+split tone → halation → grain the camera runs, and only enlarged. Provenance,
+the six originals and the command that rebuilds this sheet are in
+[samples/](samples/README.md).
+
 ## A Fuji recipe, field for field
 
 A recipe on a Fuji body is not a screen — it is a bundle of I.Q. menu items saved
