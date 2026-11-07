@@ -3824,11 +3824,23 @@ static void fs_screen_take(void) {
    */
   fs_lv_was_on = lv ? 1 : 0;
   if (lv) {
-    fs_log("screen: closing LiveView for the GUI (lv=1)");
+    /*
+     * Pause the sensor rather than leave LiveView.
+     *
+     * close_liveview() works by pressing the LV button, and that is a mode
+     * change: about a second, it can be refused, and it is not what the screen
+     * needs. PROP_LV_ACTION stops the frames arriving at once, keeps the body
+     * where the user left it, and is undoable in one call on the way out.
+     * Pausing is also what ML itself does before drawing over LiveView
+     * (powersave.c uses the same call for the motion-detect screens).
+     */
+    fs_log("screen: pausing LiveView for the GUI (lv=%d paused=%d)",
+           (int)lv, (int)lv_paused);
     fs_log_flush();
-    close_liveview();
-    msleep(120);
-    fs_log("screen: LiveView closed (lv=%d)", lv ? 1 : 0);
+    PauseLiveView();
+    msleep(80);
+    fs_log("screen: LiveView pause returned (lv=%d paused=%d)",
+           (int)lv, (int)lv_paused);
     fs_log_flush();
   }
   if (!lv) {
@@ -3925,29 +3937,17 @@ static void fs_screen_release(void) {
   if (fs_lv_was_on) {
     fs_lv_was_on = 0;
     /*
-     * Give the key that closed the screen time to take effect before deciding:
-     * MENU and PLAY are handled in Canon's GUI task, and both of them change
-     * what the panel is about to show. Pressing the LV button into an opening
-     * menu, or into a playback that is about to start, is how a module ends up
-     * fighting the body for the display it just handed back.
+     * ResumeLiveView() refuses on its own in play mode and with a menu open,
+     * so the guard against resuming into a screen that is not ours is ML's,
+     * not a 200 ms guess. It returns 0 when it declined.
      */
-    msleep(200);
-    if (lv) {
-      /* Canon already turned it back on; nothing to do. */
-    } else if (fs_want_playback) {
-      fs_log("screen: LiveView left off - Canon playback is opening");
-    } else if (is_movie_mode()) {
-      fs_log("screen: LiveView left off (movie mode: that button records)");
-    } else if (gui_menu_shown()) {
-      fs_log("screen: LiveView left off - a menu is open");
-    } else {
-      fs_log("screen: restarting LiveView");
+    if (lv_paused) {
+      int resumed = ResumeLiveView();
+      fs_log("screen: LiveView resume %s (paused=%d lv=%d mode=%d)",
+             resumed ? "done" : "declined (play or menu)", (int)lv_paused,
+             (int)lv, (int)get_gui_mode());
       fs_log_flush();
-      /* BGMT_LV is 0x1e on the 6D (platform/6D.116/gui.h). */
-      fake_simple_button(0x1e);
-      msleep(150);
     }
-    fs_log_flush();
   }
   /* Both the file and the picture are gone, so the next screen must load them
    * again: without this the stock looks unchanged and no record is read. */
