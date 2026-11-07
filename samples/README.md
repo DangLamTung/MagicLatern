@@ -27,7 +27,7 @@ cd magiclantern/modules/film_sim/se/hosttest && make grade_jpeg
 
 ./grade_jpeg ../../../../../samples/dalat/04-hilltop.jpg \
              ../../films/portra.fs /tmp/portra.jpg
-# prints: out: 237x89, neutral 0.0%, mean 174,161,137
+# prints: out: 237x89, neutral 0.1%, mean 174,161,137
 ```
 
 `grade_jpeg` reports what it wrote, including the share of neutral pixels, so a
