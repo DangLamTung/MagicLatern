@@ -49,14 +49,53 @@ static void fsg_pal_write(int entry, int rgb, uint32_t alpha)
   EngDrvOut(LCD_Palette[3 * entry + 0x300], e);
 }
 
+/* Chrome slots, in the order ml_color() returns them. */
+static const int fsg_chrome_rgb[FSG_CHROME_N] = {
+  FSG_BLACK, FSG_BG_DEEP, FSG_BG, FSG_BG2,
+  FSG_PANEL, FSG_PANEL_HI, FSG_PANEL_DARK
+};
+
+int fsg_chrome_entry(int i)
+{
+  return (i >= 0 && i < FSG_CHROME_N) ? FSG_CHROME_BASE + i : -1;
+}
+
+/*
+ * Program the chrome entries, and ask for full opacity rather than inheriting
+ * it. fsg_pal_write() deliberately keeps whatever opacity an entry already had
+ * -- that is right for the borrowed range, where ML may rely on transparency --
+ * but here the whole point is to stop the picture under the screen from showing
+ * through, so 0xFF is written directly.
+ */
+void fsg_chrome_init(void)
+{
+  if (!display_is_on() || !bmp_is_on())
+    return;
+  for (int i = 0; i < FSG_CHROME_N; i++) {
+    int rgb = fsg_chrome_rgb[i];
+    int r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
+    int y = (77 * r + 150 * g + 29 * b) >> 8;
+    int u = ((-43 * r - 85 * g + 128 * b) >> 8) & 255;
+    int v = ((128 * r - 107 * g - 21 * b) >> 8) & 255;
+    uint32_t e = 0xFF000000u | ((uint32_t)y << 16) | ((uint32_t)u << 8) |
+                 (uint32_t)v;
+    EngDrvOut(LCD_Palette[3 * (FSG_CHROME_BASE + i)], e);
+    EngDrvOut(LCD_Palette[3 * (FSG_CHROME_BASE + i) + 0x300], e);
+  }
+}
+
 void fsg_pal(const int *rgb, int n)
 {
   if (!rgb || !display_is_on() || !bmp_is_on())
     return;
-  if (n > FSG_PAL_N)
-    n = FSG_PAL_N;
+  /* Keep clear of the chrome entries at the top of the range. A canister
+   * record carries 40 colours, so 160 is more than the artwork ever asks for. */
+  if (n > FSG_CHROME_BASE - FSG_PAL_BASE)
+    n = FSG_CHROME_BASE - FSG_PAL_BASE;
   if (!fsg_pal_saved) {
-    for (int i = 0; i < FSG_PAL_N; i++)
+    /* Only the borrowed range: the chrome entries above it are ours, and
+     * saving them here would mean handing our own values back as "original". */
+    for (int i = 0; i < FSG_CHROME_BASE - FSG_PAL_BASE; i++)
       fsg_pal_orig[i] = LCD_Palette[3 * (FSG_PAL_BASE + i) + 2];
     fsg_pal_saved = 1;
   }
@@ -71,7 +110,7 @@ void fsg_pal_reset(void)
   fsg_pal_saved = 0;
   if (!display_is_on() || !bmp_is_on())
     return;
-  for (int i = 0; i < FSG_PAL_N; i++) {
+  for (int i = 0; i < FSG_CHROME_BASE - FSG_PAL_BASE; i++) {
     uint32_t entry = fsg_pal_orig[i];
     EngDrvOut(LCD_Palette[3 * (FSG_PAL_BASE + i)], entry);
     EngDrvOut(LCD_Palette[3 * (FSG_PAL_BASE + i) + 0x300], entry);
@@ -83,10 +122,11 @@ static uint8_t ml_color(int rgb)
   if (FSG_IS_SLOT(rgb))
     return (uint8_t)(FSG_PAL_BASE + (rgb & 0xFF));
   switch (rgb) {
-    case FSG_BLACK:      return COLOR_BLACK;
-    case FSG_BG_DEEP:    return COLOR_GRAY(4);
-    case FSG_BG:         return COLOR_GRAY(7);
-    case FSG_BG2:        return COLOR_GRAY(11);
+    /* Chrome: our own entries, programmed opaque by fsg_chrome_init(). */
+    case FSG_BLACK:      return FSG_CHROME_BASE + 0;
+    case FSG_BG_DEEP:    return FSG_CHROME_BASE + 1;
+    case FSG_BG:         return FSG_CHROME_BASE + 2;
+    case FSG_BG2:        return FSG_CHROME_BASE + 3;
     case FSG_BG_RED:     return COLOR_DARK_RED;
     /*
      * The chrome is drawn brighter than the design's own RGB, because this
@@ -102,9 +142,9 @@ static uint8_t ml_color(int rgb)
      * label < white); only the levels move up, so what survives the composite
      * is the contrast the layout was drawn for.
      */
-    case FSG_PANEL:      return COLOR_GRAY(19);
-    case FSG_PANEL_HI:   return COLOR_GRAY(43);
-    case FSG_PANEL_DARK: return COLOR_GRAY(14);
+    case FSG_PANEL:      return FSG_CHROME_BASE + 4;
+    case FSG_PANEL_HI:   return FSG_CHROME_BASE + 5;
+    case FSG_PANEL_DARK: return FSG_CHROME_BASE + 6;
     case FSG_LINE:       return COLOR_GRAY(68);
     case FSG_LINE_DIM:   return COLOR_GRAY(53);
     case FSG_PERF:       return COLOR_GRAY(29);

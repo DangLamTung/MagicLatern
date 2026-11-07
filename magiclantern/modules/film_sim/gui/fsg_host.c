@@ -122,3 +122,9 @@ void fsg_text(int x, int y, int size, int fg, int bg, const char *fmt, ...)
 }
 
 void fsg_reset(void) { fsg_txt_n = 0; }
+
+/* The host draws real RGB, so there is no palette to program and nothing to
+ * ask for opacity: chrome entries are just indices here. */
+void fsg_chrome_init(void) { }
+
+int fsg_chrome_entry(int i) { return i >= 0 ? i : -1; }

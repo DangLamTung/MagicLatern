@@ -3911,6 +3911,22 @@ static void fs_screen_take(void) {
            canon_gui_front_buffer_disabled(), lv ? 1 : 0);
     fs_log_flush();
   }
+  /*
+   * Program the chrome entries opaque before anything is drawn with them.
+   *
+   * This body reports opacity 0x3f for the palette it hands out (the shelf probe
+   * reads pal[9]=0x3f4054d2), which is why the playback picture kept showing
+   * through the panels. The chrome now has its own seven entries, written with
+   * 0xFF asked for, and the readback is logged so the card can say whether the
+   * display accepted it -- which is the one thing here I cannot see.
+   */
+  fsg_chrome_init();
+  {
+    uint32_t got = (uint32_t)LCD_Palette[3 * fsg_chrome_entry(4) + 2];
+    fs_log("screen: chrome palette entry %d = 0x%08x (wanted 0xff......)",
+           fsg_chrome_entry(4), (unsigned)got);
+    fs_log_flush();
+  }
   clrscr();
   /*
    * Palette calibration strip.

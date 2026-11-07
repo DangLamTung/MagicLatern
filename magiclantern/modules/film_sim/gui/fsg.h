@@ -134,6 +134,23 @@ void fsg_text(int x, int y, int size, int fg, int bg, const char *fmt, ...);
  * its own shadows. fsg_fill/fsg_text with FSG_SLOT(i) or FSG_PIX(i) then draw in
  * rgb[i]; the host build keeps the same table so the preview matches. */
 void fsg_pal(const int *rgb, int n);
+
+/*
+ * The module's own palette entries for the screen chrome.
+ *
+ * The borrowed range (FSG_PAL_BASE..) carries the stock's colours or the
+ * canister photograph, and both are transient. The chrome -- black, the three
+ * background steps and the panel greys, i.e. everything the eye reads as "the
+ * screen" -- gets its own seven entries at the top of the range, programmed
+ * from the design's own RGB at full opacity. That is the point: ML's palette
+ * on this body comes back with opacity 0x3f (the shelf probe reads
+ * pal[9]=0x3f4054d2), so a picture behind the screen shows through it. Writing
+ * our own entries is the only way to ask for opaque.
+ */
+#define FSG_CHROME_BASE 240
+#define FSG_CHROME_N    7
+void fsg_chrome_init(void);   /* program them; call when a screen is taken */
+int  fsg_chrome_entry(int i); /* palette entry for chrome slot i, for the log */
 /* Put the borrowed entries back the way they were found. */
 void fsg_pal_reset(void);
 
