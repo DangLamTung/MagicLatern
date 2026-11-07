@@ -20,15 +20,19 @@ runs on, plus `00-the-strip.png`, the contact sheet they were first shared as.
 
 These are **develops of the camera's raw files**, not the camera's JPEGs, at
 1600 px wide. That distinction is the whole point of this folder: those JPEGs
-were shot with a look in the slot, so they carry it already — measured against
-the raw develop of the same frame they come out at half the chroma and about
-two stops brighter, a milky veil over everything. A look judged on top of that
-look is a look judged twice.
+were shot with a look in the slot, so they carry it already. Measured against
+the raw develop of the same frame, the JPEG of IMG_9923 has channel means of
+55/71/85 where the develop has 94/95/91 — thirty levels of blue over red, the
+teal veil you can see — and IMG_9931's JPEG reads 59/52/19 against 90/90/53. A
+look judged on top of another look is a look judged twice.
 
 So each one is `rawdev` — the module's own level-3 path — run with
 [`base-neutral.fs`](base-neutral.fs): identity curves, no hue move, no split
-tone, no grain, and `EXPOSURE 1.8` to put the develop where the camera's own
-JPEG sat. Nothing here is a shipped stock; it is a measuring stick. The 65:24
+tone, no grain, and `EXPOSURE 1.8`, which is where an identity transform has to
+sit to land on the brightness of the camera's own JPEG (at 0, IMG_9919 develops
+to mean luma 48 against the JPEG's 74, and IMG_9932's 75 against 147).
+
+Nothing here is a shipped stock; it is a measuring stick. The 65:24
 XPan framing was set at capture, so the bar window Canon burned into its JPEG is
 read off that JPEG and cropped to, leaving the XPan image itself.
 
