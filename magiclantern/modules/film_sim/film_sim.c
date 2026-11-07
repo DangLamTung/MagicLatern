@@ -2247,6 +2247,7 @@ static void fs_slot_backup_task(void *unused) {
            * applied on top of it -- measured on IMG_9973_F.JPG, sat 63.2
            * against the camera JPEG's 29.6. */
           fs_yuvhook_bars(film_sim_aspect);
+          fs_yuvhook_need_neutral(fs_grade_in_shutter());
           fs_yuvhook_grade(fs_grade_in_shutter() ? film_sim_yuvrows : 0);
         }
       }
@@ -3226,6 +3227,18 @@ static void fs_view_run(const char *path, int screen_taken) {
     }
   }
   fs_view_active = 0;
+  /*
+   * Hand the picture back black, not as it was left.
+   *
+   * This VRAM is Canon's own: get_yuv422_vram() is the buffer play mode shows,
+   * and Canon's playback decodes into the same memory. It only writes the
+   * picture it draws, so anything of ours left around it stays on the panel --
+   * which is how the last developed photo kept appearing inside Canon's
+   * playback afterwards, and why the bars of a 65:24 file showed a ghost of the
+   * frame before. fs_view_decode() already blacks it before painting; nothing
+   * did so on the way out.
+   */
+  fs_view_clear();
   fs_screen_release();
   fs_log("view: closed");
   fs_log_flush();
@@ -8390,7 +8403,7 @@ static void fs_lv_monitor_task(void *unused) {
           fs_log("yuvhook: %d call(s) (%d still, %d ssraw), 0 graded; armed "
                  "rows %d, ready %d, level %d; last pc=%08x regs %08x %08x %08x "
                  "%08x; chunks %d [%d %d %d %d] sniff 0x%x suite %d bare %d "
-                 "nobuf %d badsize %d",
+                 "nobuf %d badsize %d style %d",
                  nc, fs_yuvhook_site_calls(0), fs_yuvhook_site_calls(1),
                  (int)fs_yuvhook_grade_rows(), (int)fs_yuvlook_ready(),
                  fs_level(),
@@ -8401,7 +8414,8 @@ static void fs_lv_monitor_task(void *unused) {
                  (int)fs_yuvhook_chunk_size(0), (int)fs_yuvhook_chunk_size(1),
                  (int)fs_yuvhook_chunk_size(2), (int)fs_yuvhook_chunk_size(3),
                  fs_yuvhook_sniff_mask(), fs_yuvhook_suite_at(),
-                 fs_yuvhook_bare_pic(), fs_yuvhook_nobuf(), (int)fs_yuvhook_unknown());
+                 fs_yuvhook_bare_pic(), fs_yuvhook_nobuf(), (int)fs_yuvhook_unknown(),
+                 fs_yuvhook_style_refused());
         }
         fs_log_flush();
       }
@@ -8623,10 +8637,17 @@ static unsigned int film_sim_init() {
          * frame Canon encodes.
          */
         fs_yuvhook_bars(film_sim_aspect);
+        fs_yuvhook_need_neutral(fs_grade_in_shutter());
         fs_yuvhook_grade(fs_grade_in_shutter() ? film_sim_yuvrows : 0);
-        fs_log("yuvgrade: in-shutter grade %s (capture style %s)",
+        /* Report the style that is actually selected, not the one we asked
+         * for: the two disagreeing is exactly the double-grade case, and the
+         * old wording asserted "Neutral" here whether or not it was true. */
+        fs_log("yuvgrade: in-shutter grade %s (capture style 0x%02x%s)",
                fs_grade_in_shutter() ? "ON" : "off",
-               fs_grade_in_shutter() ? "Neutral" : "stock");
+               (unsigned)lens_info.raw_picstyle,
+               !fs_grade_in_shutter() ? ", stock"
+                 : lens_info.raw_picstyle == 0x84 ? ", Neutral"
+                 : ", NOT Neutral - the shot hook will refuse to grade");
       }
     }
   }

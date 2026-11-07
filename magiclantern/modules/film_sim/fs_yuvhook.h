@@ -30,6 +30,19 @@ int  fs_yuvhook_write(const char *path);   /* 1 = written */
  */
 void fs_yuvhook_grade(int rows);
 int  fs_yuvhook_grade_rows(void);   /* 0 = not grading */
+/*
+ * Refuse to grade unless the camera is really on built-in Neutral (0x84).
+ *
+ * Grading a frame Canon has already rendered through a stock style gives two
+ * looks stacked, which on this body measured saturation 63.2 against the
+ * camera's own 29.6 on the same shot -- and the JPEG just looks milky, which
+ * reads as "the camera is soft" rather than as a bug. The armed flag alone
+ * cannot prevent it: it says what the module *wants*, while the style is
+ * written through a property call that can fail or be overridden afterwards.
+ * So the hook checks the style itself, per frame, and counts what it refused.
+ */
+void fs_yuvhook_need_neutral(int on);
+int  fs_yuvhook_style_refused(void);    /* frames not graded for this reason */
 /* Aspect mode (see fs_core_aspect_ratio) to burn into the shot, 0 = none. */
 void fs_yuvhook_bars(int mode);
 int fs_yuvhook_bars_burned(void);

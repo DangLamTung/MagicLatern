@@ -46,6 +46,7 @@
 #include <fio-ml.h>
 #include <patch.h>
 #include <exmem.h>
+#include <lens.h>          /* lens_info.raw_picstyle: the style the camera is ON */
 #include <stdio.h>
 #include <string.h>
 
@@ -189,6 +190,8 @@ static volatile int fs_yuv_site_diag[2];   /* 0 n/a, 1 graded, 2 not a picture,
                                             * 3 no stride, 4 nothing safe to write */
 static volatile int fs_yuv_g_still, fs_yuv_g_ssraw;
 static int fs_yuv_grade_rows;         /* 0 = do not grade                    */
+static int fs_yuv_need_neutral;       /* 1 = only grade a Neutral capture    */
+static volatile int fs_yuv_style_refused;  /* not graded: style not Neutral  */
 static volatile uint32_t fs_yuv_grade_ms;
 static volatile int fs_yuv_graded;   /* how many frames actually graded */
 /* What the last grading call actually did. Without this the log can only say
@@ -688,6 +691,22 @@ static void fs_yuv_hook_body(uint32_t *regs, uint32_t *stack, uint32_t pc)
      */
     if (!buf)
         fs_yuv_nobuf++;
+    /*
+     * The style check comes first, before anything is written.
+     *
+     * fs_yuv_grade_rows says the module *wants* the look in the shot; it does
+     * not say the camera cooperated. If the forced Neutral did not take -- the
+     * property call failed, or a style was selected afterwards -- Canon's
+     * encoder has already applied that style to these very bytes, and grading
+     * them again stacks two looks. Refuse, and say so with a code the log
+     * carries, rather than produce a milky JPEG that looks like a soft lens.
+     */
+    if (fs_yuv_grade_rows > 0 && fs_yuv_need_neutral &&
+        lens_info.raw_picstyle != 0x84) {
+        fs_yuv_style_refused++;
+        fs_yuv_diag_set(pc, 7);
+        goto bare_done;
+    }
     if (fs_yuv_grade_rows > 0 && fs_yuvlook_ready()) {
         int ci;
         if (fs_yuv_chunk_n == 0 && buf && size) {
@@ -1125,6 +1144,8 @@ void fs_yuvhook_grade(int rows) { fs_yuv_grade_rows = rows; }
  * counter in the summary then stays 0 -- which reads exactly like "the hook
  * never ran". A shot that did not grade has to be able to say that. */
 int  fs_yuvhook_grade_rows(void) { return fs_yuv_grade_rows; }
+void fs_yuvhook_need_neutral(int on) { fs_yuv_need_neutral = on ? 1 : 0; }
+int  fs_yuvhook_style_refused(void) { return fs_yuv_style_refused; }
 
 /*
  * When set, the frame is copied into memory the module owns while we are still
