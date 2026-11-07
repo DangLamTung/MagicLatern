@@ -3115,7 +3115,7 @@ static void fs_view_clear(void) {
     unsigned int *p =
         (unsigned int *)(fs_view_vram + (size_t)y * (size_t)fs_view_pitch);
     for (int i = 0; i < (fs_view_pitch >> 2); i++)
-      p[i] = 0x10001000u; /* U=0, Y=16 (black), V=0 -- signed chroma, see fs_bg_blank */
+      p[i] = 0x10801080u; /* U=128, Y=16 (black), V=128 (fs_view_px writes offset chroma) */
   }
 }
 
@@ -3646,88 +3646,6 @@ static void fs_blit_rows(int direction, int y0, int y1) {
   }
 }
 
-/*
- * Blank the picture the overlay is composited over.
- *
- * The panels are drawn into the OSD layer, and how much of the layer shows
- * through is decided by palette opacity -- the card's own log reads
- * pal[9]=0x3f4054d2, i.e. the panel grey is composited at roughly a quarter
- * weight, so the photo underneath is what the eye sees. Rather than fight an
- * opacity this body will not raise, the thing underneath is removed: play mode
- * keeps a still picture in get_yuv422_vram(), and that buffer is written black
- * here. What shows through a translucent panel is then black, not a photograph.
- *
- * Canon repaints that buffer when it feels like it, so this is called before
- * every repaint and is a no-op unless the sampled checksum says somebody wrote
- * over the black.
- */
-static uint32_t fs_bg_sum_seen;
-
-static uint32_t fs_bg_sum(void) {
-  struct vram_info *vr = get_yuv422_vram();
-  uint32_t sum = 0;
-  int w, h;
-  if (!vr || !vr->vram || vr->pitch < 8 || vr->height <= 0) return 0;
-  w = vr->pitch >> 2;
-  h = vr->height;
-  {
-    const uint32_t *p = (const uint32_t *)UNCACHEABLE(vr->vram);
-    int step = w > 64 ? w / 16 : 1;
-    /* Across the width as well as down the frame: a repaint that covers only
-     * the middle of the picture would slip past a single column. */
-    for (int y = 0; y < h; y += 13)
-      for (int x = 0; x < w; x += step)
-        sum = sum * 31u + p[(size_t)y * (size_t)w + x];
-  }
-  return sum;
-}
-
-static void fs_bg_blank(void) {
-  struct vram_info *vr = get_yuv422_vram();
-  if (!vr || !vr->vram || vr->pitch < 8 || vr->height <= 0) return;
-  {
-    uint32_t *p = (uint32_t *)UNCACHEABLE(vr->vram);
-    int words = (vr->pitch >> 2) * vr->height;
-    /*
-     * Chroma 0, not 128.
-     *
-     * The palette this body reports for its own neutral entries settles the
-     * convention: pal[38]=0x3f090000 and pal[200]=0x3f370000 are black and a
-     * dark grey with U=V=0, so neutral chroma here is 0, not the offset 128 a
-     * JPEG stream uses. Filling with 128 wrote the most extreme chroma the
-     * field can hold into every pixel -- which is exactly what the camera then
-     * showed: a green screen, a few turns into a session, wherever the blanked
-     * area was visible.
-     */
-    for (int i = 0; i < words; i++) p[i] = 0x10001000u; /* U=0 Y=16 V=0 */
-  }
-}
-
-/* Cheap when nothing changed: one sampled checksum per repaint. */
-static void fs_bg_hold(void) {
-  uint32_t now = fs_bg_sum();
-  static int told;
-  if (now != fs_bg_sum_seen) {
-    struct vram_info *vr = get_yuv422_vram();
-    fs_bg_blank();
-    fs_bg_sum_seen = fs_bg_sum();
-    if (!told) {
-      told = 1;
-      /*
-       * The addresses matter as much as the size: if the YUV buffer this
-       * blanks is the same memory the OSD is drawn in, blanking it erases the
-       * screen instead of what is under it, and the log has to be able to say
-       * so without another guess.
-       */
-      fs_log("gui: picture under the overlay blanked (%dx%d at 0x%08x, "
-             "bmp=0x%08x, was 0x%08x, wrote 0x%08x)",
-             vr ? vr->pitch / 2 : 0, vr ? vr->height : 0,
-             vr ? (unsigned)vr->vram : 0u, (unsigned)bmp_vram_real(),
-             (unsigned)now, 0x10001000u);
-    }
-  }
-}
-
 /* rows = rows COPIED between the two buffers; in direct mode there are none,
  * and the log is evidence, so it must not claim copies that did not happen. */
 static void fs_paint_account(uint32_t ms, int rows) {
@@ -3738,7 +3656,6 @@ static void fs_paint_account(uint32_t ms, int rows) {
 
 static void fs_paint(void (*fn)(void)) {
   uint32_t t0 = get_ms_clock();
-  fs_bg_hold();
   if (film_sim_direct) {
     BMP_LOCK(bmp_draw_to_idle(0); fn();)
   } else {
@@ -3758,7 +3675,6 @@ static void fs_paint(void (*fn)(void)) {
  */
 static void fs_paint_band(int y0, int y1, void (*fn)(void)) {
   uint32_t t0 = get_ms_clock();
-  fs_bg_hold();
   if (film_sim_direct) {
     BMP_LOCK(bmp_draw_to_idle(0); fn();)
   } else {
@@ -3781,6 +3697,7 @@ static void fs_paint_band(int y0, int y1, void (*fn)(void)) {
  */
 #define FS_HINT_KEY_TEXTS 5
 static int fs_painted_hint = -1;
+static int fs_strip_moving;   /* the strip is still gliding: bands only */
 
 /* 0 = frames flowing, 1 = Global Draw off, 2 = press INFO, 3 = LV off,
  * 4 = waiting. Same order as the branches in fs_lv_status(). */
@@ -4019,10 +3936,6 @@ static void fs_screen_take(void) {
     msleep(2500);
   }
 
-  /* Whatever the panel was showing a moment ago is not ours; blank it before
-   * the first frame is drawn. */
-  fs_bg_sum_seen = 0;   /* force the first hold to blank */
-  fs_bg_hold();
   fs_key_guard_until = get_ms_clock() + FS_KEY_GUARD_MS;
 }
 
@@ -4124,7 +4037,8 @@ static int fs_shelf_run(void) {
       int dt = (int)(get_ms_clock() - fs_anim_ms);
       fs_anim_ms = get_ms_clock();
       /* The header sheen keeps its own, slower clock. */
-      if (fs_shelf_animate(dt))
+      fs_strip_moving = fs_shelf_animate(dt);
+      if (fs_strip_moving)
         fs_strip_dirty = 1;
       if (get_ms_clock() - fs_sheen_ms > 260) {
         fs_sheen_ms = get_ms_clock();
@@ -4164,8 +4078,19 @@ static int fs_shelf_run(void) {
     {
       static uint32_t last_full;
       uint32_t now = get_ms_clock();
-      int full_due = fs_gui_dirty &&
+      /*
+       * A full frame is drawn when the action has finished, not while it runs.
+       *
+       * A dial step or a glide changes one band; drawing all 480 rows in the
+       * middle of that is work nobody sees, and it is what made the screen
+       * stutter and then look stuck. So while the strip is still gliding only
+       * its band is repainted, and the whole screen is drawn once it settles.
+       * The first frame is the exception: there is nothing on the panel yet.
+       */
+      int full_due = fs_gui_dirty && !fs_strip_moving &&
                      (!last_full || (uint32_t)(now - last_full) >= 100);
+      if (!fs_gui_logged)
+        full_due = 1;
       if (full_due)
         last_full = now;
       else if (fs_gui_dirty)
