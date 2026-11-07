@@ -2818,6 +2818,16 @@ static int fs_prov_step(void) {
   return 0;
 }
 
+/* Choosing a stock on the shelf writes the film into the camera: the style
+ * body, the sliders, the WB balance -- 16 KB of property traffic per step.
+ * Doing that on every detent is what the card's log shows (capset x2, wb,
+ * film body, prop_deliver 16704 bytes, per detent), and it is why a fast
+ * dial leaves the screen unable to keep up. The screen still shows the new
+ * stock at once; the camera gets it when the dial settles. */
+static int fs_apply_wait;
+static volatile uint32_t fs_apply_due_ms;
+#define FS_APPLY_SETTLE_MS 350
+
 static volatile int fs_dev_request = 0; /* SET in the darkroom */
 static volatile int fs_view_request = FS_VIEW_NONE;
 static volatile int fs_ui_running = 0;
@@ -4108,6 +4118,10 @@ static int fs_shelf_run(void) {
     }
     if (fs_prov_tick())
       fs_gui_dirty = 1;
+    if (fs_apply_wait && (uint32_t)(get_ms_clock() - fs_apply_due_ms) >= FS_APPLY_SETTLE_MS) {
+      fs_apply_wait = 0;
+      fs_apply_request = 1;
+    }
     if (fs_apply_request) {
       fs_apply_request = 0;
       fs_apply_film_now();
@@ -4187,6 +4201,10 @@ static int fs_shelf_run(void) {
   /* Property writes block on an ICU round-trip, so they must never run inside
    * the keypress callback: that is Canon's GUI task and stalling it kills every
    * later key. They run here, after the panel is back with the firmware. */
+  if (fs_apply_wait) {   /* a choice made just before leaving still counts */
+    fs_apply_wait = 0;
+    fs_apply_request = 1;
+  }
   if (fs_apply_request) {
     fs_apply_request = 0;
     fs_apply_film_now();
@@ -7511,14 +7529,17 @@ static int fs_key_handle(int k) {
     case ACT_UP:
     case ACT_UP_WHEEL:
       film_sim_stock = (film_sim_stock + count - 1) % count;
-      fs_apply_request = 1; /* the choice goes to the camera immediately */
+      /* the choice reaches the camera when the dial settles -- see fs_apply_wait */
+      fs_apply_wait = 1;
+      fs_apply_due_ms = get_ms_clock();
       fs_gui_dirty = 1;
       return 0;
     case ACT_RIGHT:
     case ACT_DOWN:
     case ACT_DOWN_WHEEL:
       film_sim_stock = (film_sim_stock + 1) % count;
-      fs_apply_request = 1;
+      fs_apply_wait = 1;
+      fs_apply_due_ms = get_ms_clock();
       fs_gui_dirty = 1;
       return 0;
     case ACT_Q:
@@ -7529,6 +7550,7 @@ static int fs_key_handle(int k) {
       /* Apply, stay. This used to close the screen, which read as "the GUI
        * does not show": FILMSIM.LOG has "first frame drawn" and "shelf: closed"
        * 9 ms apart, with the SET press between them. */
+      fs_apply_wait = 0;
       fs_apply_request = 1;
       fs_toast_until = get_ms_clock() + 1500;
       snprintf(fs_toast, sizeof fs_toast, "APPLIED  %s",
