@@ -146,11 +146,11 @@ in \`hosttests.log\`.
 | hosttests.log | the test run this build came from |
 | SHA256SUMS | every file above |
 
-A .mo hash identifies one build, not a tree: the module embeds its build time
-(`2026-11-06 09:15:18 UTC` and three differing bytes is the whole delta between
-two builds of the same source). Use SHA256SUMS to check a download, not to
-decide whether two builds agree -- compare commit ids for that, and compare the
-card against the build you just installed.
+A .mo hash identifies one build, not a tree: the module embeds its build time,
+so "2026-11-06 09:15:18 UTC" and three differing bytes is the whole delta between
+two builds of the same source. Use SHA256SUMS to check a download, not to decide
+whether two builds agree -- compare commit ids for that, and compare the card
+against the build you just installed.
 NOTES
 
 say "checksums"
