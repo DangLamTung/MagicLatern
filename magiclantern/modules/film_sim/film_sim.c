@@ -2571,7 +2571,23 @@ static int fs_apply_film_now(void) {
    * Apply hardware White Balance Shift and Kelvin (from Florin / film_xml)
    */
   if (film_sim_wb_shift) {
-    if (st.kelvin > 0) {
+    /*
+     * With the engine grading the frame, the stock's balance is the look's
+     * business, not the camera's.
+     *
+     * At level 2/3 the capture style is forced Neutral so Canon contributes no
+     * look -- but this block still pushed the stock's Kelvin and WB shift onto
+     * the sensor, so the engine's recipe landed on a frame the camera had
+     * already warmed and greened. Superia 400 shows it plainly: 5200 K with
+     * +2 blue/amber and +2 green/magenta under a recipe that already lifts
+     * greens and puts +8 green in the shadows comes out green everywhere, while
+     * the shelf, the darkroom and the develop -- which see only the recipe --
+     * promise something else. The same stock cannot look like two films.
+     *
+     * So at level 2/3 the balance stays as shot; the user's own offsets on the
+     * WB screen still apply, because that is a decision, not a recipe.
+     */
+    if (st.kelvin > 0 && !neutral_style) {
       lens_set_kelvin(st.kelvin);
     }
     /*
@@ -2586,10 +2602,15 @@ static int fs_apply_film_now(void) {
      * on a base simulation.
      */
     {
-      int ba = fs_clamp_i(st.wbs_ba + fs_clamp_i(film_sim_wbs_ba, -9, 9), -9, 9);
-      int gm = fs_clamp_i(st.wbs_gm + fs_clamp_i(film_sim_wbs_gm, -9, 9), -9, 9);
+      int sba = neutral_style ? 0 : st.wbs_ba;
+      int sgm = neutral_style ? 0 : st.wbs_gm;
+      int ba = fs_clamp_i(sba + fs_clamp_i(film_sim_wbs_ba, -9, 9), -9, 9);
+      int gm = fs_clamp_i(sgm + fs_clamp_i(film_sim_wbs_gm, -9, 9), -9, 9);
       lens_set_wbs_ba(ba);
       lens_set_wbs_gm(gm);
+      if (neutral_style && (st.wbs_ba || st.wbs_gm || st.kelvin > 0))
+        fs_log("wb: stock balance left to the engine (%d K, %+d/%+d not written; "
+               "camera %+d/%+d)", st.kelvin, st.wbs_ba, st.wbs_gm, ba, gm);
     }
   }
 
