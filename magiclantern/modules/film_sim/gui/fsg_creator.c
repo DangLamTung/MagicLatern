@@ -531,6 +531,61 @@ void fsg_draw_fx(const fs_creator_t *c)
            "Q: wheel/tone/fx    MENU back");
 }
 
+
+/* ---- the slot screen ------------------------------------------------- */
+
+/*
+ * Four wheels, listed with what each one holds. UP/DOWN picks, SET loads.
+ * A slot that has never been saved says EMPTY and SET on it starts a blank
+ * wheel rather than overwriting the one you are on -- "start a second look"
+ * has to be one keypress from "I am looking at the first".
+ */
+void fsg_draw_slots(const fs_creator_t *c)
+{
+    char right[24];
+    int i;
+
+    fsg_fill(0, 0, FSG_W, FSG_H, FSG_BG);
+    snprintf(right, sizeof right, "SLOT %d / %d", c->slot_cur + 1,
+             FS_CREATOR_SLOTS);
+    header("COLOR CREATOR", c->stock, right);
+
+    fsg_text(24, 76, FSG_T_LARGE, FSG_AMBER, FSG_BG, "RECIPE SLOTS");
+    fsg_text(24, 112, FSG_T_SMALL, FSG_GREY, FSG_BG,
+             "Each slot is its own wheel. SET loads the one under the bar.");
+
+    for (i = 0; i < FS_CREATOR_SLOTS; i++) {
+        int y = 150 + i * 58;
+        int here = (i == c->slot_pick);
+        const char *label = c->slot_label[i];
+        char file[24];
+
+        snprintf(file, sizeof file, "ML/FILM/%s.fs",
+                 c->slot_file[i] ? c->slot_file[i] : "WHEEL");
+        if (here)
+            fsg_fill(16, y - 6, 688, 48, FSG_PANEL);
+        fsg_text(24, y, FSG_T_SMALL, here ? FSG_AMBER : FSG_GREY, 
+                 here ? FSG_PANEL : FSG_BG, "%s%s", here ? "> " : "  ", file);
+        fsg_text(400, y, FSG_T_SMALL,
+                 label ? FSG_WHITE : FSG_GREY_DIM,
+                 here ? FSG_PANEL : FSG_BG, "%s",
+                 label ? label : "EMPTY");
+        if (i == c->slot_cur)
+            fsg_text(600, y, FSG_T_SMALL, FSG_GREEN,
+                     here ? FSG_PANEL : FSG_BG, "%s", "LOADED");
+    }
+
+    if (c->save_err)
+        fsg_text(24, 386, FSG_T_SMALL, FSG_RED_MID, FSG_BG, "%s",
+                 "SAVE FAILED - see FILMSIM.LOG");
+    else
+        fsg_text(24, 386, FSG_T_SMALL, FSG_GREY, FSG_BG,
+                 "%s", "PLAY saves the wheel you have open into this slot");
+
+    footer("UP/DOWN slot    SET load    PLAY save",
+           "Q: wheel/tone/fx/slots    MENU back");
+}
+
 void fsg_draw_creator(const fs_creator_t *c)
 {
     char right[32];
@@ -835,6 +890,18 @@ void fs_creator_defaults(fs_creator_t *c, const char *stock)
     c->screen = 0;
     c->slot_name = "WHEEL";
     c->look_name = "WHEEL";
+    {
+        static const char *files[FS_CREATOR_SLOTS] = {
+            "WHEEL", "WHEEL2", "WHEEL3", "WHEEL4"
+        };
+        int k;
+        for (k = 0; k < FS_CREATOR_SLOTS; k++) {
+            c->slot_file[k] = files[k];
+            c->slot_label[k] = NULL;
+        }
+    }
+    c->slot_cur = 0;
+    c->slot_pick = 0;
     c->stock = stock;
 }
 
@@ -849,6 +916,11 @@ void fs_creator_step(fs_creator_t *c, int act)
     switch (act) {
     case A_LEFT:
     case A_RIGHT:
+        if (c->screen == 3) {
+            int d = (act == A_RIGHT) ? 1 : (FS_CREATOR_SLOTS - 1);
+            c->slot_pick = (c->slot_pick + d) % FS_CREATOR_SLOTS;
+            break;
+        }
         if (c->screen == 0) {
             int d = (act == A_RIGHT) ? 1 : (FS_CREATOR_WEDGES - 1);
             c->sel = (c->sel + d) % FS_CREATOR_WEDGES;
@@ -860,6 +932,12 @@ void fs_creator_step(fs_creator_t *c, int act)
         /* fall through */
     case A_UP:
     case A_DOWN:
+        if (c->screen == 3) {
+            int step = (act == A_UP) ? 1 : -1;
+            c->slot_pick = (c->slot_pick + step + FS_CREATOR_SLOTS) %
+                           FS_CREATOR_SLOTS;
+            break;
+        }
         if (c->screen == 0) {
             int step = (act == A_UP) ? 1 : -1;
             if (c->field == 0) {
@@ -900,6 +978,13 @@ void fs_creator_step(fs_creator_t *c, int act)
         c->saved = 0;
         break;
     case A_SET:
+        if (c->screen == 3) {
+            /* No file I/O from a key handler: raise the flag, the module's
+             * loop does the read and the parse. */
+            if (c->slot_pick != c->slot_cur)
+                c->slot_request = 1;
+            break;
+        }
         if (c->screen == 0) {
             int t;
             for (t = 0; t < 3; t++)
@@ -912,7 +997,7 @@ void fs_creator_step(fs_creator_t *c, int act)
         }
         break;
     case A_Q:
-        c->screen = (c->screen + 1) % 3;
+        c->screen = (c->screen + 1) % 4;
         c->field = 0;
         break;
     default:

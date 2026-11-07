@@ -13,6 +13,7 @@
 #define FSG_CREATOR_H
 
 #define FS_CREATOR_WEDGES 12
+#define FS_CREATOR_SLOTS  4
 
 typedef struct
 {
@@ -27,7 +28,7 @@ typedef struct
 
     int sel;        /* which wedge the dials act on, 0..11               */
     int field;      /* 0 = saturation, 1 = rotation, 2 = luminance       */
-    int screen;     /* 0 = colour wheel, 1 = tone                        */
+    int screen;     /* 0 wheel, 1 tone, 2 FX, 3 slots                    */
     int dirty;      /* something changed since the last save             */
 
     /* Tone screen. Signed, in recipe units. */
@@ -58,6 +59,21 @@ typedef struct
     int         save_err;
     const char *slot_name;   /* the file PLAY writes, e.g. "WHEEL2"     */
     const char *look_name;   /* the name the shelf will show for it     */
+
+    /*
+     * Four wheels, not one.
+     *
+     * Typing a name with UP/DOWN on this panel is the reason nobody had more
+     * than one: the NAME editor exists, but spelling "WOLFPACK" one letter at
+     * a time is not a workflow. The slot screen lists the four files, says
+     * what is in each, and loads the one you pick -- so a second wheel is one
+     * keypress away and its name is only a label.
+     */
+    int slot_cur;                    /* which slot is loaded             */
+    int slot_pick;                   /* highlighted on the slot screen   */
+    int slot_request;                /* module: load slot_pick, please   */
+    const char *slot_file[FS_CREATOR_SLOTS];   /* WHEEL .. WHEEL4      */
+    const char *slot_label[FS_CREATOR_SLOTS];  /* saved NAME, or NULL  */
     const char *saved_name;  /* what was just written, once it exists   */
 
     const char *stock;   /* base stock name, shown in the header          */
@@ -101,6 +117,7 @@ extern const char *const fs_creator_tabs[3];
 extern const int fs_creator_tab_field[3];
 void fsg_draw_tone(const fs_creator_t *c);
 void fsg_draw_fx(const fs_creator_t *c);
+void fsg_draw_slots(const fs_creator_t *c);
 
 /*
  * Format the creator's state as a .fs recipe. Returns the length written, or

@@ -178,6 +178,16 @@ int main(int argc, char **argv)
     fsg_draw_tone(&c);
     dump("creator2");
 
+    /* the slot screen: four wheels, one of them loaded */
+    fsg_reset();
+    c.screen = 3;
+    c.slot_pick = 1;
+    c.slot_cur = 0;
+    c.slot_label[0] = "LOOK";
+    c.slot_label[2] = "WARM";
+    fsg_draw_slots(&c);
+    dump("creator_slots");
+
     /* the Fuji WB shift grid, moved off centre so the crosshair is visible */
     fsg_reset();
     {

@@ -65,6 +65,35 @@ int main(void)
     CHECK(hue_lum, lum, "LUM");
 #undef CHECK
 
+    /*
+     * The slot loader has to get the tone handles back from CURVE, because a
+     * recipe carries no TONE_SH/TONE_HI key -- the curve IS the record of them.
+     * Same search the module runs, over the same grid the tone screen steps on.
+     */
+    {
+        int sh, hi, best = 1 << 30, bsh = 0, bhi = 0, k;
+        for (sh = -60; sh <= 60; sh += 2)
+            for (hi = -60; hi <= 60; hi += 2) {
+                int err = 0;
+                for (k = 0; k < st.master.n; k++) {
+                    int in = st.master.x[k], want = st.master.y[k];
+                    int t = in * 100 / 255;
+                    int got = in + (sh * (100 - t) * (100 - t)) / 10000
+                                 - (hi * t * t) / 10000;
+                    if (got < 0) got = 0;
+                    if (got > 255) got = 255;
+                    err += (got - want) * (got - want);
+                }
+                if (err < best) { best = err; bsh = sh; bhi = hi; }
+            }
+        printf("tone: wrote %d/%d, recovered %d/%d (err %d)\n",
+               c.shadow, c.highlight, bsh, bhi, best);
+        if (bsh != c.shadow || bhi != c.highlight) {
+            puts("FAIL: the slot loader could not recover the tone handles");
+            fail = 1;
+        }
+    }
+
     printf("%s: 36 values round-tripped\n", fail ? "FAILED" : "PASS");
     return fail;
 }

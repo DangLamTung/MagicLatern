@@ -4946,6 +4946,158 @@ static void fs_paint_beads(void (*fn)(void)) {
                    FSG_CREATOR_RING_Y1 - FSG_CREATOR_RING_Y0);
 }
 
+/* ---- the four wheels ------------------------------------------------- */
+
+/* Defined further down, next to the menu rows that use them. */
+static void fs_slot_file_name(int slot, char *out, int cap);
+static int  fs_slot_default(void);
+static void fs_creator_scan_slots(void);
+
+static char fs_slot_label_buf[FS_CREATOR_SLOTS][SE_STOCK_NAME];
+
+/*
+ * Read one slot's recipe into the creator state.
+ *
+ * The writer stores twelve hue values per line and derives its CURVE from
+ * (shadow, highlight), so the two tone handles are recovered by searching the
+ * same function the writer used rather than by inventing keys the engine would
+ * complain about. Everything the parsed stock does not carry -- halation is not
+ * in se_stock -- is read from the text directly.
+ */
+static int fs_creator_open_slot(int slot)
+{
+  char path[64];
+  char text[4096];
+  se_stock st;
+  size_t got = 0;
+  int i, sh, hi, best_sh = 0, best_hi = 0, best_err = 1 << 30;
+  FILE *f;
+
+  if (slot < 0 || slot >= FS_CREATOR_SLOTS) return 0;
+  fs_slot_file_name(slot, path, sizeof path);        /* into path as a name */
+  {
+    char file[12];
+    snprintf(file, sizeof file, "%s", path);
+    snprintf(path, sizeof path, "ML/FILM/%s.fs", file);
+  }
+
+  f = FIO_OpenFile(path, O_RDONLY);
+  if (!f) {
+    /* Nothing there: a blank wheel on that slot. */
+    for (i = 0; i < FS_CREATOR_WEDGES; i++) {
+      fs_creator.sat[i] = 100;
+      fs_creator.rot[i] = 0;
+      fs_creator.lum[i] = 100;
+    }
+    fs_creator.shadow = fs_creator.highlight = 0;
+    fs_log("slots: %s does not exist, slot %d starts blank", path, slot);
+    return 0;
+  }
+  got = FIO_ReadFile(f, text, sizeof text - 1);
+  FIO_CloseFile(f);
+  if (got <= 0) return 0;
+  text[got] = 0;
+
+  if (se_stock_parse(text, got, &st) != SE_OK || !st.name[0]) {
+    fs_log("slots: %s did not parse, slot left alone", path);
+    fs_log_flush();
+    return 0;
+  }
+
+  for (i = 0; i < FS_CREATOR_WEDGES && i < SE_HUE_SECTORS; i++) {
+    fs_creator.sat[i] = (int)(st.hue_sat[i] + (st.hue_sat[i] >= 0 ? 0.5f : -0.5f));
+    fs_creator.rot[i] = (int)(st.hue_rot[i] + (st.hue_rot[i] >= 0 ? 0.5f : -0.5f)) ;
+    fs_creator.lum[i] = (int)(st.hue_lum[i] + (st.hue_lum[i] >= 0 ? 0.5f : -0.5f));
+  }
+  fs_creator.grain = (int)(st.grain + 0.5f);
+  fs_creator.grain_size = (int)(st.grain_size + 0.5f);
+  fs_creator.chrome = st.color_chrome;
+  fs_creator.fx_blue = st.fx_blue;
+
+  /* Tone: the curve in the file was produced by tone_out() at five points. */
+  for (sh = -60; sh <= 60; sh += 2)
+    for (hi = -60; hi <= 60; hi += 2) {
+      int err = 0, k;
+      for (k = 0; k < st.master.n && err < best_err; k++) {
+        int in = st.master.x[k];
+        int want = st.master.y[k];
+        int t = in * 100 / 255;
+        int got_v = in + (sh * (100 - t) * (100 - t)) / 10000
+                       - (hi * t * t) / 10000;
+        if (got_v < 0) got_v = 0;
+        if (got_v > 255) got_v = 255;
+        err += (got_v - want) * (got_v - want);
+      }
+      if (err < best_err) { best_err = err; best_sh = sh; best_hi = hi; }
+    }
+  fs_creator.shadow = best_sh;
+  fs_creator.highlight = best_hi;
+
+  /* HALATION is not in se_stock; take the first number of its line. */
+  {
+    const char *h = strstr(text, "HALATION");
+    fs_creator.halation = h ? atoi(h + 8) : 0;
+  }
+
+  /* The name travels with the slot: fs_look_name is the module's own buffer
+   * and is declared after this point, so the label array carries it. */
+  snprintf(fs_slot_label_buf[slot], sizeof fs_slot_label_buf[slot], "%s",
+           st.name);
+  fs_creator.look_name = fs_slot_label_buf[slot];
+  /* The slot the menu has selected is the one this screen writes; the labels
+   * come from the four files on the card so the slot screen can say what each
+   * one holds instead of just ML/FILM/WHEEL2.fs. */
+  fs_creator.slot_cur = fs_slot_default();
+  fs_creator.slot_pick = fs_creator.slot_cur;
+  fs_creator_scan_slots();
+  fs_creator.slot_label[slot] = fs_slot_label_buf[slot];
+  fs_log("slots: loaded slot %d from %s as '%s' (tone %d/%d, curve err %d)",
+         slot, path, st.name, best_sh, best_hi, best_err);
+  fs_log_flush();
+  return 1;
+}
+
+/* What is in each slot, for the slot screen. Names only: opening four files
+ * completely to print a label would be work for nothing. */
+static void fs_creator_scan_slots(void)
+{
+  int slot;
+  for (slot = 0; slot < FS_CREATOR_SLOTS; slot++) {
+    char path[64], text[1024];
+    FILE *f;
+    size_t got;
+    char file[12];
+
+    fs_slot_file_name(slot, file, sizeof file);
+    snprintf(path, sizeof path, "ML/FILM/%s.fs", file);
+    f = FIO_OpenFile(path, O_RDONLY);
+    fs_creator.slot_label[slot] = NULL;
+    if (!f) continue;
+    got = FIO_ReadFile(f, text, sizeof text - 1);
+    FIO_CloseFile(f);
+    if (got <= 0) continue;
+    text[got] = 0;
+    {
+      const char *n = strstr(text, "NAME");
+      if (n) {
+        char nm[SE_STOCK_NAME];
+        int k = 0;
+        n += 4;
+        while (*n == ' ') n++;
+        while (*n && *n != '\n' && *n != '\r' && k < (int)sizeof nm - 1)
+          nm[k++] = *n++;
+        nm[k] = 0;
+        while (k > 0 && nm[k - 1] == ' ') nm[--k] = 0;
+        if (k) {
+          snprintf(fs_slot_label_buf[slot], sizeof fs_slot_label_buf[slot],
+                   "%s", nm);
+          fs_creator.slot_label[slot] = fs_slot_label_buf[slot];
+        }
+      }
+    }
+  }
+}
+
 static void fs_creator_render(void)
 {
   if (fs_creator.screen == 0) {
@@ -4957,6 +5109,8 @@ static void fs_creator_render(void)
       fsg_draw_creator_beads(&fs_creator, fs_creator_spring.x, &fs_creator_spin);
   } else if (fs_creator.screen == 2) {
     fsg_draw_fx(&fs_creator);
+  } else if (fs_creator.screen == 3) {
+    fsg_draw_slots(&fs_creator);
   } else {
     fsg_draw_tone(&fs_creator);
   }
@@ -5582,6 +5736,24 @@ static int fs_creator_run(void) {
      * of the dial piles into one glide instead of jumping 30 degrees a press.
      * Nothing repaints once the spring settles.
      */
+    /* A slot was picked on the slot screen: load it here, not in the key
+     * handler, because it is a file read. */
+    if (fs_creator.slot_request) {
+      fs_creator.slot_request = 0;
+      fs_creator.slot_cur = fs_creator.slot_pick;
+      fs_creator_slot = fs_creator.slot_cur;
+      {
+        char file[12];
+        static char slot_file_buf[12];
+        fs_slot_file_name(fs_creator_slot, slot_file_buf, sizeof slot_file_buf);
+        snprintf(file, sizeof file, "%s", slot_file_buf);
+        fs_creator.slot_name = slot_file_buf;
+      }
+      fs_creator_open_slot(fs_creator.slot_cur);
+      fs_creator.dirty = 0;
+      fs_creator.saved = 0;
+      fs_creator_dirty = 1;
+    }
     if (fs_creator.screen == 0 &&
         get_ms_clock() - fs_creator_anim_ms >= 30) {
       fs_creator_anim_ms = get_ms_clock();
