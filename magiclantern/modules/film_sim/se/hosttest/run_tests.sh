@@ -55,6 +55,25 @@ if [ -x ./tableerr ]; then
     fi
 fi
 
+# The develop colour path end to end on a JPEG the engine did not write:
+# decode -> look -> encode -> read the file back. It reports the percentage of
+# neutral pixels, because a broken framing window left the struct zeroed and
+# look_emit() dropped every row: the file was a valid JPEG of grey and every
+# other test here passed. Verified by putting that bug back (100.0% neutral).
+gj_in=../../../../../samples/dalat/04-hilltop.jpg
+if [ -f "$gj_in" ]; then
+    if [ ! -x ./grade_jpeg ]; then echo "FAIL gradejpeg (not built)"; fail=1; else
+    gj_out=$(./grade_jpeg "$gj_in" ../../films/portra.fs /tmp/gj_check.jpg 2>/dev/null \
+             | sed -n 's/^out: .*, neutral \([0-9]*\)\.\([0-9]\)%,.*/\1.\2/p')
+    if [ -z "$gj_out" ]; then echo "FAIL gradejpeg (no output report)"; fail=1
+    elif awk "BEGIN{exit !($gj_out <= 5.0)}"; then echo "ok   gradejpeg ($gj_out% neutral, bound 5)"
+    else echo "FAIL gradejpeg ($gj_out% neutral: the look was not applied)"; fail=1
+    fi
+    fi
+else
+    echo "skip gradejpeg (no samples/ in this checkout)"
+fi
+
 # The camera's vsnprintf has no precision support and no '-' flag: "ML/FILM/%.8s.fs" reached a
 # real card as ".8s.fs", and "ML/FILMS/90_%.8s.xml" held <code>%.11s</code>
 # inside it. Width and zero fill are fine -- FILMSIM.LOG's "%08x" addresses

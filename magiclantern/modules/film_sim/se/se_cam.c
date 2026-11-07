@@ -2118,6 +2118,17 @@ se_err se_cam_grade_jpeg(const char *jpg_path, const char *stock_path,
         goto done;
     }
 
+    /*
+     * The whole frame: this path grades a JPEG it is handed, so it crops
+     * nothing. The window must still be set, because look_emit() keeps rows
+     * in crop_y0..crop_y1 and the struct starts zeroed -- with crop_y1 = 0 it
+     * dropped every row and wrote a file of the encoder's grey initialiser.
+     */
+    d.crop_x0 = 0;
+    d.crop_x1 = ow;
+    d.crop_y0 = 0;
+    d.crop_y1 = oh;
+    d.row_in = 0;
     d.width = ow;
     d.height = oh;
     d.src_w = ow;
