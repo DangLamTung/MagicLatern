@@ -2750,72 +2750,71 @@ static volatile int fs_apply_request = 0; /* SET in the shelf */
  * same millisecond. That is why navigation worked "sometimes": a press with
  * identity acted at once, a press without it had to wait for a timer.
  *
- * So the step is taken *immediately* and provisionally. If a real key arrives
- * inside FS_PROVISIONAL_MS the step is undone and the real key does its job --
- * instant response, still exactly one action per press. If nothing follows, the
- * provisional step stands.
+ * So a 0x54 marks a step as pending and takes nothing. If the real key arrives
+ * inside FS_PROVISIONAL_MS it does the job and clears the mark; if nothing
+ * follows, the screen loop takes the step when the window expires. Exactly one
+ * of the two carries it, which is what stops the shelf landing on a stock the
+ * dial never stopped at.
  */
 #define FS_PROVISIONAL_MS 150
 
 static volatile int fs_prov_active; /* a provisional step is pending */
 static volatile uint32_t fs_prov_ms;
-static volatile int fs_prov_stock;       /* film_sim_stock before that step */
-static volatile int fs_prov_photo;       /* dcim_photo_index before it     */
 static volatile uint32_t fs_prov_add_ms; /* second 0x54 of the same press? */
 
-static void fs_prov_undo(void) {
-  if (!fs_prov_active)
-    return;
+/* The real code arrived: the step is its business, so drop the marker. */
+static void fs_prov_clear(void) { fs_prov_active = 0; }
+
+/* The step a lone 0x54 asked for, taken when the real code never came. */
+static int fs_prov_take(void) {
   fs_prov_active = 0;
   if (fs_gui_active) {
-    film_sim_stock = fs_prov_stock;
-    /* The step also queued "apply this film"; undoing the step must undo that
-     * too, or the cancelled film is still written into the picture style. */
-    fs_apply_request = 0;
+    int count = (film_active_count > 0) ? film_active_count : FILM_COUNT;
+    film_sim_stock = (film_sim_stock + 1) % count;
+    fs_apply_request = 1;
+    return 1;
   }
-  if (fs_darkroom_active)
-    dcim_photo_index = fs_prov_photo;
+  if (fs_darkroom_active) {
+    if (dcim_photo_count > 0)
+      dcim_photo_index = (dcim_photo_index + 1) % dcim_photo_count;
+    return 1;
+  }
+  return 0;
 }
 
-/* Called from the screen loops: expire a provisional step that nobody undid. */
+/*
+ * Called from the screen loops: a 0x54 that nobody followed up carries the
+ * step after the window.
+ *
+ * The step itself used to be taken here, provisionally, and the real code that
+ * follows one millisecond later undid it and applied its own -- two writers for
+ * one detent, with a single saved value to undo from. Spinning the dial queued
+ * several of those and the undo could put back a stock that had already been
+ * superseded, which is what "choosing the film stock is bugged" looks like: the
+ * shelf landing on a stock the dial never stopped at.
+ *
+ * Now a 0x54 only marks that a step is pending; exactly one of the two paths
+ * takes it, so one detent is one step whichever form the body sends.
+ */
 static int fs_prov_tick(void) {
   if (!fs_prov_active)
     return 0;
   if (get_ms_clock() - fs_prov_ms < FS_PROVISIONAL_MS)
     return 0;
-  fs_prov_active = 0;
-  return 0;
+  return fs_prov_take();
 }
 
-/* Take the step. Returns 1 when the screen needs redrawing. */
+/* A 0x54 arrived. Nothing is taken yet: the body follows it with the real code
+ * about a millisecond later, and fs_prov_tick() covers the case where it does
+ * not. Returns 1 when the screen needs redrawing. */
 static int fs_prov_step(void) {
   uint32_t now = get_ms_clock();
 
   /* Two 0x54 in a row with nothing between them are one physical press. */
   if (fs_prov_active && now - fs_prov_add_ms < 60)
     return 0;
-  if (fs_prov_active)
-    fs_prov_active = 0; /* commit the previous one, then take another */
-
-  if (fs_gui_active) {
-    int count = (film_active_count > 0) ? film_active_count : FILM_COUNT;
-    fs_prov_stock = film_sim_stock;
-    fs_prov_photo = dcim_photo_index;
-    fs_prov_ms = fs_prov_add_ms = now;
-    fs_prov_active = 1;
-    film_sim_stock = (film_sim_stock + 1) % count;
-    fs_apply_request = 1;
-    return 1;
-  }
-  if (fs_darkroom_active) {
-    fs_prov_stock = film_sim_stock;
-    fs_prov_photo = dcim_photo_index;
-    fs_prov_ms = fs_prov_add_ms = now;
-    fs_prov_active = 1;
-    if (dcim_photo_count > 0)
-      dcim_photo_index = (dcim_photo_index + 1) % dcim_photo_count;
-    return 1;
-  }
+  fs_prov_active = 1;
+  fs_prov_ms = fs_prov_add_ms = now;
   return 0;
 }
 
@@ -7370,7 +7369,7 @@ static unsigned int fs_keypress_raw_cbr(unsigned int event_ptr) {
   if (k == 0x54) {
     if (fs_gui_active || fs_darkroom_active) {
       int changed = fs_prov_step();
-      fs_log("rawkey p=84: provisional step (changed=%d)", changed);
+      fs_log("rawkey p=84: step pending (changed=%d)", changed);
       if (changed) {
         if (fs_gui_active)
           fs_gui_dirty = 1;
@@ -7383,9 +7382,10 @@ static unsigned int fs_keypress_raw_cbr(unsigned int event_ptr) {
 
   if (act != ACT_NONE) {
     /* A key with identity inside the provisional window means Canon did send
-     * the real code after all: undo the guess before acting on it. */
+     * the real code after all: this event owns the step, so drop the mark and
+     * let the switch below take it exactly once. */
     if (fs_prov_active && get_ms_clock() - fs_prov_ms <= FS_PROVISIONAL_MS)
-      fs_prov_undo();
+      fs_prov_clear();
     /*
      * Every screen logs its raw keys, not just the shelf and the darkroom.
      *
