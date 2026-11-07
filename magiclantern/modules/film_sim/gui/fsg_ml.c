@@ -88,15 +88,29 @@ static uint8_t ml_color(int rgb)
     case FSG_BG:         return COLOR_GRAY(7);
     case FSG_BG2:        return COLOR_GRAY(11);
     case FSG_BG_RED:     return COLOR_DARK_RED;
-    case FSG_PANEL:      return COLOR_GRAY(9);
-    case FSG_PANEL_HI:   return COLOR_GRAY(16);
-    case FSG_PANEL_DARK: return COLOR_GRAY(6);
-    case FSG_LINE:       return COLOR_GRAY(52);
-    case FSG_LINE_DIM:   return COLOR_GRAY(26);
-    case FSG_PERF:       return COLOR_GRAY(20);
-    case FSG_PERF_HI:    return COLOR_GRAY(30);
+    /*
+     * The chrome is drawn brighter than the design's own RGB, because this
+     * body composites the OSD layer at a fraction of full weight: the shelf's
+     * own probe reads pal[9]=0x3f4054d2, opacity 0x3f in the high byte, and the
+     * photograph underneath was visibly showing through the panels before that
+     * buffer was blanked. A colour chosen at full weight arrives at about a
+     * quarter of it, so the label greys were the first thing to stop being
+     * readable on a 3 inch panel -- which is exactly what the camera reported:
+     * text present but unreadable.
+     *
+     * The ordering of the design is kept (deep background < panel < line <
+     * label < white); only the levels move up, so what survives the composite
+     * is the contrast the layout was drawn for.
+     */
+    case FSG_PANEL:      return COLOR_GRAY(19);
+    case FSG_PANEL_HI:   return COLOR_GRAY(43);
+    case FSG_PANEL_DARK: return COLOR_GRAY(14);
+    case FSG_LINE:       return COLOR_GRAY(68);
+    case FSG_LINE_DIM:   return COLOR_GRAY(53);
+    case FSG_PERF:       return COLOR_GRAY(29);
+    case FSG_PERF_HI:    return COLOR_GRAY(48);
     case FSG_AMBER:      return COLOR_ORANGE;
-    case FSG_AMBER_DIM:  return COLOR_GRAY(60);
+    case FSG_AMBER_DIM:  return COLOR_ORANGE;
     case FSG_RED:        return COLOR_RED;
     case FSG_RED_DARK:   return COLOR_RED;
     case FSG_RED_DEEP:   return COLOR_DARK_RED;
@@ -105,8 +119,8 @@ static uint8_t ml_color(int rgb)
     case FSG_GREEN:      return COLOR_GREEN2;
     case FSG_GREEN_DARK: return COLOR_GREEN1;
     case FSG_WHITE:      return COLOR_WHITE;
-    case FSG_GREY:       return COLOR_GRAY(72);
-    case FSG_GREY_DIM:   return COLOR_GRAY(48);
+    case FSG_GREY:       return COLOR_GRAY(90);
+    case FSG_GREY_DIM:   return COLOR_GRAY(78);
     case FSG_BUBBLE:     return COLOR_DARK_RED;
     case FSG_BUBBLE_HI:  return COLOR_RED;
     default:             return COLOR_WHITE;
