@@ -183,6 +183,7 @@ left out: [m-film.md](docs/m-film.md).
 | [m-film.md](docs/m-film.md) | where the imported stocks came from |
 | [release.md](docs/release.md) | the gates a release passes, and how to read the hashes |
 | [wifi-functions.md](docs/wifi-functions.md) | what the 6D's WiFi stack actually is, and why it is not driven |
+| [sooc.md](docs/sooc.md) | whether a straight-out-of-camera frame carries the look once, twice or not at all |
 
 
 ## Licence
