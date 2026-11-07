@@ -4118,28 +4118,49 @@ static int fs_shelf_run(void) {
         NotifyBox(1200, "Film: %s", film_active_table[idx].name);
       }
     }
-    if (fs_gui_dirty) {
-      fs_gui_dirty = 0;
-      fs_strip_dirty = 0;
-      fs_header_dirty = 0;
-      fs_picture_sync(); /* outside the lock: this one reads the card */
-      fs_paint(fs_gui_render);
-      if (!fs_gui_logged) {
-        fs_gui_logged = 1;
-        beep_times(2);
-        fs_log("shelf: first frame drawn (vram=0x%x on=%d direct=%d)",
-               (unsigned)bmp_vram_real(), bmp_is_on(), film_sim_direct);
-        fs_bmp_probe("shelf");
-      }
-    } else {
-      /* Only a band moved: copy and draw those rows, not the whole screen. */
-      if (fs_strip_dirty) {
+    /*
+     * A fast dial sends steps faster than a full frame can be drawn, and every
+     * step used to schedule one: the loop then did nothing but full repaints,
+     * each with its card read for the artwork, and the screen stopped answering
+     * until the dial stopped turning -- "turn fast and the GUI will not load".
+     *
+     * Coalesce instead: one full frame per 100 ms at most, and while a full
+     * frame is being deferred the strip band still repaints, so the shelf moves
+     * with the dial and only the text behind it catches up.
+     */
+    {
+      static uint32_t last_full;
+      uint32_t now = get_ms_clock();
+      int full_due = fs_gui_dirty &&
+                     (!last_full || (uint32_t)(now - last_full) >= 100);
+      if (full_due)
+        last_full = now;
+      else if (fs_gui_dirty)
+        fs_strip_dirty = 1;   /* keep moving while the text waits its turn */
+
+      if (full_due) {
+        fs_gui_dirty = 0;
         fs_strip_dirty = 0;
-        fs_paint_band(FSG_STRIP_Y, FSG_STRIP_Y + FSG_STRIP_H, fs_gui_render_strip);
-      }
-      if (fs_header_dirty) {
         fs_header_dirty = 0;
-        fs_paint_band(0, FSG_HEADER_H, fs_gui_render_header);
+        fs_picture_sync(); /* outside the lock: this one reads the card */
+        fs_paint(fs_gui_render);
+        if (!fs_gui_logged) {
+          fs_gui_logged = 1;
+          beep_times(2);
+          fs_log("shelf: first frame drawn (vram=0x%x on=%d direct=%d)",
+                 (unsigned)bmp_vram_real(), bmp_is_on(), film_sim_direct);
+          fs_bmp_probe("shelf");
+        }
+      } else {
+        /* Only a band moved: copy and draw those rows, not the whole screen. */
+        if (fs_strip_dirty) {
+          fs_strip_dirty = 0;
+          fs_paint_band(FSG_STRIP_Y, FSG_STRIP_Y + FSG_STRIP_H, fs_gui_render_strip);
+        }
+        if (fs_header_dirty) {
+          fs_header_dirty = 0;
+          fs_paint_band(0, FSG_HEADER_H, fs_gui_render_header);
+        }
       }
     }
     /* Once a second, what the painting cost -- the number the log has to carry
