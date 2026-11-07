@@ -3713,8 +3713,17 @@ static void fs_bg_hold(void) {
     fs_bg_sum_seen = fs_bg_sum();
     if (!told) {
       told = 1;
-      fs_log("gui: picture under the overlay blanked (%dx%d, was 0x%08x)",
-             vr ? vr->pitch / 2 : 0, vr ? vr->height : 0, (unsigned)now);
+      /*
+       * The addresses matter as much as the size: if the YUV buffer this
+       * blanks is the same memory the OSD is drawn in, blanking it erases the
+       * screen instead of what is under it, and the log has to be able to say
+       * so without another guess.
+       */
+      fs_log("gui: picture under the overlay blanked (%dx%d at 0x%08x, "
+             "bmp=0x%08x, was 0x%08x, wrote 0x%08x)",
+             vr ? vr->pitch / 2 : 0, vr ? vr->height : 0,
+             vr ? (unsigned)vr->vram : 0u, (unsigned)bmp_vram_real(),
+             (unsigned)now, 0x10001000u);
     }
   }
 }
