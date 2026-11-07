@@ -30,6 +30,7 @@
 #include <module.h>
 #include <picstyle.h>
 #include <powersave.h>
+#include <shoot.h>          /* close_liveview(): stop the sensor, not just ignore it */
 #include <property.h>
 #include <vram.h>
 #include <zebra.h>
@@ -3767,6 +3768,9 @@ static volatile uint32_t fs_key_guard_until;
 /* Nonzero when fs_screen_take() moved the body into play mode and
  * fs_screen_release() has to put it back into shooting. */
 static int fs_took_play;
+/* LiveView and playback were running when a screen opened, so
+ * fs_screen_release() has to give them back. */
+static int fs_lv_was_on;
 
 static void fs_screen_take(void) {
   powersave_prohibit();
@@ -3803,6 +3807,30 @@ static void fs_screen_take(void) {
    * canon_gui_disable_front_buffer()), and the reference film module logs
    * lv/gui_state before opening its shelf for the same reason.
    */
+  /*
+   * Stop LiveView before the GUI draws, and stop the playback image with it.
+   *
+   * The screens are opaque, but the frame underneath them is not ours: with
+   * LiveView running, Canon keeps a live picture in the buffer the OSD is
+   * composited over, and its GUI task keeps feeding the panel. The filter here
+   * already declines to grade while a screen is up (see the fs_gui_active gate
+   * in the step function), which stops *our* writes but leaves Canon's stream
+   * running: the shelf and the colour wheel flicker, and the strip's own
+   * rotation fights the frames arriving underneath it.
+   *
+   * So the pipeline is shut off, not just ignored: close_liveview() for the
+   * sensor, then play mode below, where the panel shows a still buffer that
+   * nobody else is rewriting. Both are undone in fs_screen_release().
+   */
+  fs_lv_was_on = lv ? 1 : 0;
+  if (lv) {
+    fs_log("screen: closing LiveView for the GUI (lv=1)");
+    fs_log_flush();
+    close_liveview();
+    msleep(120);
+    fs_log("screen: LiveView closed (lv=%d)", lv ? 1 : 0);
+    fs_log_flush();
+  }
   if (!lv) {
     enter_play_mode();
     fs_took_play = 1;
@@ -3887,6 +3915,23 @@ static void fs_screen_release(void) {
     msleep(120);
   }
   canon_gui_enable_front_buffer(1); /* give Canon its panel back, redrawn */
+  /*
+   * Start LiveView again if it was running when the screen opened.
+   *
+   * Only outside movie mode: there the LV button is the record button, which is
+   * exactly why close_liveview() leaves movie mode through play instead of
+   * pressing it.
+   */
+  if (fs_lv_was_on) {
+    fs_lv_was_on = 0;
+    if (!lv && !is_movie_mode()) {
+      fs_log("screen: restarting LiveView");
+      fs_log_flush();
+      /* BGMT_LV is 0x1e on the 6D (platform/6D.116/gui.h). */
+      fake_simple_button(0x1e);
+      msleep(150);
+    }
+  }
   /* Both the file and the picture are gone, so the next screen must load them
    * again: without this the stock looks unchanged and no record is read. */
   fs_pic_code[0] = '\0';
