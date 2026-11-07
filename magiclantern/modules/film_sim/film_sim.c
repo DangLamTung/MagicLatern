@@ -3924,13 +3924,30 @@ static void fs_screen_release(void) {
    */
   if (fs_lv_was_on) {
     fs_lv_was_on = 0;
-    if (!lv && !is_movie_mode()) {
+    /*
+     * Give the key that closed the screen time to take effect before deciding:
+     * MENU and PLAY are handled in Canon's GUI task, and both of them change
+     * what the panel is about to show. Pressing the LV button into an opening
+     * menu, or into a playback that is about to start, is how a module ends up
+     * fighting the body for the display it just handed back.
+     */
+    msleep(200);
+    if (lv) {
+      /* Canon already turned it back on; nothing to do. */
+    } else if (fs_want_playback) {
+      fs_log("screen: LiveView left off - Canon playback is opening");
+    } else if (is_movie_mode()) {
+      fs_log("screen: LiveView left off (movie mode: that button records)");
+    } else if (gui_menu_shown()) {
+      fs_log("screen: LiveView left off - a menu is open");
+    } else {
       fs_log("screen: restarting LiveView");
       fs_log_flush();
       /* BGMT_LV is 0x1e on the 6D (platform/6D.116/gui.h). */
       fake_simple_button(0x1e);
       msleep(150);
     }
+    fs_log_flush();
   }
   /* Both the file and the picture are gone, so the next screen must load them
    * again: without this the stock looks unchanged and no record is read. */
