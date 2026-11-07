@@ -102,12 +102,14 @@ as bars (see [Limits](#limits--stated-plainly)).
 
 ## Samples
 
-![Six Đà Lạt frames, each with no look, then Portra, Classic Neg, Velvia and Tri-X](samples/dalat/look-sheet.jpg)
+![Eleven Đà Lạt frames, each with no look, then Portra, Classic Neg, Velvia and Tri-X](samples/dalat/look-sheet.jpg)
 
-The scenes are Đà Lạt, from the author's own strip; the graded tiles are the
-module's develop output, written by the same decode → curves → hue knots →
-split tone → halation → grain the camera runs, and only enlarged. Provenance,
-the six originals and the command that rebuilds this sheet are in
+Eleven Đà Lạt frames off the 6D this module runs on, the morning of 2 November
+2026: in each row the frame with no look, then Portra, Classic Neg, Velvia and
+Tri-X. The samples themselves are develops of the camera's raw files — its own
+JPEGs from that morning carry the look that was in the slot, at half the chroma
+— and the graded tiles are the module's develop colour path, only enlarged.
+Provenance and the commands that rebuild all of it are in
 [samples/](samples/README.md).
 
 ## A Fuji recipe, field for field

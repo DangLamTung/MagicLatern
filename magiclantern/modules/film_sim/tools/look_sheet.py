@@ -36,6 +36,24 @@ HUE_LUM   100,100,100,100,100,100,100,100,100,100,100,100
 """
 
 
+def prepare(scene, width, tmp):
+    """Downscale the scene first when a sheet has to stay a sane size.
+
+    grade_jpeg decodes at half size, so a tile is half the source; a 2736-wide
+    frame would make each tile 1368 wide and a six-row sheet 8 MB. The sample
+    files keep their resolution -- only the sheet's input is reduced.
+    """
+    if not width:
+        return scene
+    im = Image.open(scene).convert("RGB")
+    if im.width <= width:
+        return scene
+    out = os.path.join(tmp, "src-" + os.path.basename(scene))
+    im.resize((width, round(im.height * width / im.width)), Image.LANCZOS).save(
+        out, quality=95, subsampling=0)
+    return out
+
+
 def develop(scene, stock, out):
     if not os.path.exists(out):
         r = subprocess.run([GRADE, scene, stock, out],
@@ -54,6 +72,8 @@ def main():
     ap.add_argument("--stock", action="append", default=None,
                     help="recipe path; default the four used in the docs")
     ap.add_argument("--zoom", type=int, default=3)
+    ap.add_argument("--width", type=int, default=0,
+                    help="downscale each scene to this width before grading")
     a = ap.parse_args()
 
     stocks = a.stock or [os.path.join(FILMS, n) for n in
@@ -68,13 +88,14 @@ def main():
     tiles = []
     for path, label in a.scene:
         row = []
+        src = prepare(path, a.width, tmp)
         for i, (_, stock) in enumerate(columns):
             out = os.path.join(tmp, "%s-%d.jpg" % (label, i))
-            row.append((label, Image.open(develop(path, stock, out)).convert("RGB")))
+            row.append((label, Image.open(develop(src, stock, out)).convert("RGB")))
         tiles.append(row)
 
     hdr = 18
-    gut = 10 + max(len(lbl) for lbl, _ in a.scene) * 6
+    gut = 10 + max(len(lbl) for _, lbl in a.scene) * 6
     tw, th = tiles[0][0][1].size
     tw *= a.zoom
     th *= a.zoom

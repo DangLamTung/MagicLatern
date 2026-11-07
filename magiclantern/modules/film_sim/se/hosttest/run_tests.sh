@@ -60,7 +60,7 @@ fi
 # neutral pixels, because a broken framing window left the struct zeroed and
 # look_emit() dropped every row: the file was a valid JPEG of grey and every
 # other test here passed. Verified by putting that bug back (100.0% neutral).
-gj_in=../../../../../samples/dalat/04-hilltop.jpg
+gj_in=../../../../../samples/dalat/03-lookout.jpg
 if [ -f "$gj_in" ]; then
     if [ ! -x ./grade_jpeg ]; then echo "FAIL gradejpeg (not built)"; fail=1; else
     gj_out=$(./grade_jpeg "$gj_in" ../../films/portra.fs /tmp/gj_check.jpg 2>/dev/null \
